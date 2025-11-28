@@ -153,8 +153,8 @@ async function generateIndexPage(rootDir) {
             <div class="container" style="max-width: 100%; margin: 0; padding: 0;">
 
                 <header class="main-header" style="padding: 20px;">
-                    <h1 style="padding: 0;"><a href="./" style="text-decoration: none;">Página Principal de Contenido</a></h1>
-                    <p style="padding: 0;">Mostrando ${allVideoData.length} videos de todos los canales. (Videos cargados de forma aleatoria).</p>
+                    <h1 style="padding: 0;"><a href="./" style="text-decoration: none;">You2Pub</a></h1>
+                    <p style="padding: 0;">Mostrando ${allVideoData.length} videos de todos los canales.</p>
                 </header>
 
                 <hr style="margin: 0 20px;">

@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
             channelHtml += `
                 <li class="sidebar-item">
                     <a href="${channel.url}" title="Ver canal: ${channel.name}">
-                        <img src="${channel.icon}" alt="Icono de ${channel.name}" style="width: 20px; height: 20px; margin-right: 5px; border-radius: 50%; object-fit: cover;">
+                        <img src="${channel.icon}" alt="Icono de ${channel.name}" class="SideBarIcons">
                         <span class="channel-name-full">${channel.name}</span>
                     </a>
                 </li>

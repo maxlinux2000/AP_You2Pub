@@ -258,6 +258,15 @@ h1, h2, h3, p {
     background-color: var(--border-color);
 }
 
+.SideBarIcons {
+    width: 60px;
+    height: 60px;
+    margin-right:5px;
+    border-radius: 50%;
+    object-fit: cover;"
+}
+
+
 /* ==================================
  * 5. Video Grid (lazy-load.js)
  * ================================== */

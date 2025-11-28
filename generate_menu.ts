@@ -54,7 +54,7 @@ async function generateMenuFiles(rootDir: string) {
                 const relativeUrl = `./${channelName}/index.html`;
                 
                 // Ruta del icono (asumiendo que está en el directorio del canal)
-                const iconPath = `./${channelName}/icon.jpg`; 
+                const iconPath = `./${channelName}/img/icon.png`; 
                 
                 allChannelData.push({
                     name: channelName,

@@ -84,39 +84,7 @@ fi
 
 echo -e "${GREEN}✔ Ubicación actual (Carpeta de canal): $(pwd)${NC}"
 
-# --- Extracción de la URL del Banner ---
-# 6.1. curl -sL: Obtiene el contenido de la URL de forma silenciosa y sigue redirecciones.
-# 6.2. La tubería procesa el HTML/JSON para aislar la URL.
-BANNER_URL=$(curl -sL "$ID_O_URL" | \
-    tr ',' '\n' | \
-    grep '{"url":"https://' | \
-    grep banner | \
-    tr '{' '\n' | \
-    grep url | \
-    cut -d '"' -f4)
-
-# --- Verificación y Descarga ---
-if [ -z "$BANNER_URL" ]; then
-    echo "❌ ERROR: No se pudo extraer la URL del banner del código fuente."
-    exit 1
-fi
-
-# Define el nombre de archivo usando el nombre de usuario
-CLEAN_NAME=$(echo "$ID_O_URL" | cut -d '@' -f2)
-OUTPUT_FILENAME="banner_${CLEAN_NAME}.jpg"
-
-echo "✔ URL del Banner encontrada. Descargando..."
-
-# 6.3. Descargar la imagen
-wget -O ./img/"$OUTPUT_FILENAME" "$BANNER_URL" 2>/dev/null
-
-if [ $? -eq 0 ] && [ -s ./img/"$OUTPUT_FILENAME" ]; then
-    echo "✔ Banner guardado con éxito como: $OUTPUT_FILENAME"
-else
-    echo "❌ ERROR: Fallo al descargar el archivo."
-fi
-
-# 6.4. Descargamos channel.info.json para obtener la descripcion del canal
+# 6.1. Descargamos channel.info.json para obtener la descripcion del canal icono y banner
 
 yt-dlp \
     --cookies-from-browser  firefox  \
@@ -125,14 +93,30 @@ yt-dlp \
     --playlist-items 0 \
     "$ID_O_URL" \
     -o channel.json
-#cat channel.info.json | jq -r '.description'
+
+# 6.2. Bajamos el icono del canal
+mkdir -p img
+IconUrl=$(jq '.thumbnails' metadatos_base.json  | grep "url" | cut -d '"' -f4 | tail -n1 )
+wget "$IconUrl" -O ./img/icon.png 2>/dev/null
+
+# 6.3. Bajamos el banner del canal
+BANNER_URL=$(jq -r '.thumbnails[] | select(.id == "banner_uncropped").url' channel.info.json) #'
+# Define el nombre de archivo usando el nombre de usuario
+CLEAN_NAME=$(echo "$ID_O_URL" | cut -d '@' -f2)
+OUTPUT_FILENAME="banner_${CLEAN_NAME}.jpg"
+echo "✔ URL del Banner encontrada. Descargando..."
+# 6.3. Descargar la imagen
+wget -O ./img/"$OUTPUT_FILENAME" "$BANNER_URL" 2>/dev/null
+
+# 6.4 checks
+if [ $? -eq 0 ] && [ -s ./img/"$OUTPUT_FILENAME" ]; then
+    echo "✔ Banner guardado con éxito como: $OUTPUT_FILENAME"
+else
+    echo "❌ ERROR: Fallo al descargar el archivo."
+fi
 
 # 6.5. Añadimos un fichero con dentro la url del canal y la resolución de descarga original
 echo "$ID_O_URL,$RESOLUTION_ARGUMENT" > xcron
-# 6.6. Bajamos el icono del canal
-mkdir -p img
-IconUrl=$(jq '.thumbnails' metadatos_base.json  | grep "url" | cut -d '"' -f4 | tail -n1 )
-wget "$IconUrl" -O ./img/icon.png
 
 # ----------------------------------------------------------------------------------
 # 🔑 PASO B: Obtener Lista de IDs (Mismo proceso que la Playlist)
