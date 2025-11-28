@@ -68,6 +68,72 @@ h1, h2, h3, p {
 }
 
 /* ==================================
+ * Tipografía y Contenido (H1, P, PRE)
+ * ================================== */
+
+/* Título Principal del Video (H1) */
+.main-content-wrapper h1 {
+    font-size: 1.5em; /* Reducido de un tamaño muy grande (ej. 2em o más) */
+    margin: 10px 0 10px 0;
+    line-height: 1.2;
+    color: var(--text-primary);
+    text-align: center;
+}
+
+/* Subtítulos (H2 y H3) */
+.main-content-wrapper h2 {
+    font-size: 1.3em;
+    margin: 20px 0 10px 0;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 5px;
+}
+
+.main-content-wrapper h3 {
+    font-size: 1.1em;
+    margin: 15px 0 5px 0;
+    color: var(--text-secondary);
+}
+
+/* Párrafos y Metadata del Canal */
+.main-content-wrapper p {
+    font-size: 0.95em; /* Un poco más pequeño y compacto */
+    margin: 5px 0;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+/* Etiqueta <pre> para la descripción del video y subtítulos */
+.main-content-wrapper pre {
+    font-family: var(--font-mono); /* Fuente monoespaciada para código/texto plano */
+    font-size: 0.85em; /* Muy compacto para grandes bloques de texto */
+    white-space: pre-wrap; /* Mantiene saltos de línea y respeta el ancho del contenedor */
+    word-wrap: break-word; 
+    background-color: var(--bg-secondary);
+    padding: 15px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    line-height: 1.4;
+    max-height: 300px; /* Limita la altura de la descripción para evitar que ocupe toda la pantalla */
+    overflow-y: auto; /* Permite desplazamiento si excede la altura */
+}
+
+/* Ajuste específico para el contenedor de video */
+#mainVideo {
+    width: 100%;
+    max-width: 900px; /* Limita el ancho máximo del video para que no sea excesivo en pantallas grandes */
+    height: auto;
+    display: block;
+    margin: 20px auto; /* Centra el reproductor */
+}
+
+/* Estilos para el bloque de metadatos (Canal, Fecha) */
+.channel-header p {
+    font-size: 0.9em; /* Hacemos la metadata muy compacta */
+    margin: 2px 0;
+}
+
+
+/* ==================================
  * Topbar y Controles (Posicionamiento y Agrupación)
  * ================================== */
 
@@ -82,8 +148,19 @@ h1, h2, h3, p {
     align-items: center;
 }
 
+/* ==================================
+ * Controles de Reproducción
+ * ================================== */
+
+.controls-bar {
+    display: flex; /* Habilita el modo Flexbox */
+    justify-content: center; /* 🛑 Centra los elementos hijos (botones) horizontalmente */
+    gap: 20px; /* Añade un espacio entre los botones */
+    margin: 15px 0; /* Espacio vertical por encima y por debajo */
+}
+
 /* Estilos base para los botones (font y theme) */
-.theme-toggle, .font-control {
+.theme-toggle, .font-control, .buttons {
     padding: 8px 12px;
     cursor: pointer;
     background-color: var(--bg-secondary);
@@ -91,6 +168,7 @@ h1, h2, h3, p {
     border: 1px solid var(--border-color);
     border-radius: 4px;
     transition: background-color 0.3s, color 0.3s;
+    font-size: 1em;
 }
 
 /* Estilo para el campo de búsqueda */
@@ -117,7 +195,7 @@ h1, h2, h3, p {
     margin-left: 275px; /* Espacio para el sidebar abierto */
     /* 💡 Aumentamos el margen superior para que no choque con la Top Bar */
     padding-top: 60px; 
-    padding-left: 35px
+    padding-left: 50px
     transition: margin-left 0.3s, padding-top 0.3s;
     min-height: 100vh;
 
@@ -143,7 +221,7 @@ h1, h2, h3, p {
 }
 
 #sidebar.collapsed ~ .main-content-wrapper {
-    margin-left: 35px; /* Ocupa el ancho completo cuando el sidebar está colapsado */
+    margin-left: 50px; /* Ocupa el ancho completo cuando el sidebar está colapsado */
 }
 
 /* Botón de Toggle fuera del flujo normal */
@@ -215,6 +293,79 @@ h1, h2, h3, p {
 .video-item-content {
     padding: 10px 15px;
 }
+
+/* ==================================
+ * Canal y Banner Fijo
+ * ================================== */
+
+/* Contenedor del Banner: Altura fija, ocultar desbordamiento */
+.banner-container-channel {
+    width: 100%;
+    height: 60px;
+    overflow: hidden;
+    position: relative; /* Para posicionar el botón Home */
+    background-color: var(--bg-primary); /* Fallback */
+}
+
+/* La imagen del banner */
+.main-banner {
+    width: 100%;
+    /* Asegura que la imagen cubra el contenedor y se centre verticalmente */
+    height: 100%;
+    object-fit: cover; 
+    object-position: center;
+    display: block;
+}
+
+/* Botón Home sobre el banner */
+.home-button-banner {
+    top: 10px;
+    right: 10px;
+    z-index: 1003; 
+    background-color: var(--bg-secondary);
+    color: var(--text-color);
+    border-radius: 50%;
+    padding: 8px;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px var(--shadow-color);
+}
+.home-button-banner svg {
+    width: 100%;
+    height: 100%;
+    fill: currentColor;
+}
+
+/* Contenido del Canal (encabezado, icono, descripción) */
+.channel-header {
+    padding: 20px 20px 0 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.channel-icon-large {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 10px;
+    border: 3px solid var(--border-color);
+}
+
+.channel-description {
+    max-width: 800px;
+    margin: 10px auto 20px auto;
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+
+
 `;
 
 // Lógica para escribir el archivo (asumiendo que está dentro de una función asíncrona)

@@ -129,12 +129,51 @@ async function generateChannelPage(channelPath) {
 
 
     // 4. Generar el contenido HTML
-    
-    const BANNER_PATH = './img/banner.jpg'; 
-    const ICON_PATH = './img/icon.jpg'; 
-    const OUTPUT_FILENAME_VIDEO = OUTPUT_FILENAME; // Para que sea claro
-    
+    // ===========================================
+    // 🛑 NUEVA LÓGICA DE DETECCIÓN DE IMÁGENES
+    // ===========================================
+    const IMG_DIR = join(channelPath, 'img');
+    let BANNER_PATH = './img/placeholder-banner.jpg'; // Valor por defecto
+    let ICON_PATH = './img/placeholder-icon.png';    // Valor por defecto
+
+    try {
+        for await (const fileEntry of Deno.readDir(IMG_DIR)) {
+            const filename = fileEntry.name;
+            
+            // Error 2: Detectar el Icono (icon.png)
+            if (filename.toLowerCase() === 'icon.png') {
+                ICON_PATH = `./img/${filename}`;
+            }
+            
+            // Error 3: Detectar el Banner (banner_<nombre-canal>.jpg)
+            // Ya que solo hay dos imágenes, podemos ser flexibles y buscar cualquier banner
+            if (filename.startsWith('banner_') && (filename.endsWith('.jpg') || filename.endsWith('.jpeg'))) {
+                BANNER_PATH = `./img/${filename}`;
+            }
+        }
+    } catch (e) {
+        console.warn(`   ⚠️ No se pudo leer la carpeta 'img' en ${channelName}. Usando placeholders.`);
+    }
+
+    const OUTPUT_FILENAME_VIDEO = "index.html";
+
     const bodyContent = `
+        <div id="topbar" class="topbar-controls">
+            <button id="fontDecrease" class="font-control" title="Disminuir Tamaño de Fuente">A-</button> 
+            <button id="fontIncrease" class="font-control" title="Aumentar Tamaño de Fuente">A+</button>
+            <button id="themeToggle" class="theme-toggle" title="Alternar Modo Claro/Oscuro">
+                Cambiar Tema
+            </button>
+            <a href="../index.html" class="home-button-banner" title="Volver a la Página Principal">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                </svg>
+            </a>
+
+
+        </div>
+
+
         <nav id="sidebar" class="collapsed">
             <button id="toggleSidebar" title="Alternar menú">☰</button>
             <div class="sidebar-header">Canales</div>
@@ -142,18 +181,8 @@ async function generateChannelPage(channelPath) {
                 <li class="sidebar-item" style="padding: 10px; color: var(--text-secondary);">Cargando canales...</li>
             </ul>
         </nav>
-        
-        <button id="themeToggle" class="theme-toggle">
-            Cambiar Tema
-        </button>
-        
         <div class="main-content-wrapper">
             <div class="banner-container-channel">
-                <a href="../index.html" class="home-button-banner" title="Volver a la Página Principal">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-                    </svg>
-                </a>
                 <img src="${BANNER_PATH}" alt="Banner del Canal ${channelTitle}" class="main-banner"/>
             </div>
 
@@ -186,11 +215,12 @@ async function generateChannelPage(channelPath) {
             const ALL_VIDEOS_DATA = ${JSON.stringify(videoData)};
             const VIDEOS_PER_PAGE = ${VIDEOS_PER_PAGE};
         </script>
-        
-        <script src="../js/theme-toggle.js"></script>
-        <script src="../js/lazy-load.js"></script>
-        <script src="../js/menu.js"></script>
-    `;
+
+        <script src="../js/theme-toggle.js" defer></script> 
+        <script src="../js/lazy-load.js" defer></script>
+        <script src="../js/font-size.js" defer></script>
+        <script src="../js/menu.js" type="module" defer></script>
+`;
 
     // 5. Generar la página HTML completa
     // La ruta relativa al CSS es '../css/style.css'
