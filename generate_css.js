@@ -1,0 +1,232 @@
+// generate_css.js
+
+import { join } from "https://deno.land/std@0.211.0/path/mod.ts"; 
+
+const [rootDir] = Deno.args; 
+const OUTPUT_FILENAME = "style.css";
+const OUTPUT_PATH = join(rootDir, 'css', OUTPUT_FILENAME); 
+
+if (!rootDir) {
+    console.error("Falta la ruta al directorio raíz.");
+    Deno.exit(1);
+}
+
+const cssContent = `
+/* ==================================
+ * 1. Variables Globales y Base
+ * ================================== */
+
+:root {
+    /* Control de Tamaño de Fuente (Modificado por js/font-size.js) */
+    --font-scale-base: 16px; 
+
+    /* Variables de Tema Light (Defectos) */
+    --bg-primary: #f8f8f8;
+    --bg-secondary: #ffffff;
+    --text-color: #1a1a1a;
+    --link-color: #0066cc;
+    --border-color: #cccccc;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+}
+
+/* ==================================
+ * 2. Tema Oscuro (.dark-mode)
+ * ================================== */
+
+body.dark-mode {
+    --bg-primary: #1e1e1e;
+    --bg-secondary: #252526;
+    --text-color: #f0f0f0;
+    --link-color: #8ab4f8; /* Azul más claro para dark mode */
+    --border-color: #444444;
+    --shadow-color: rgba(0, 0, 0, 0.5);
+}
+
+/* ==================================
+ * 3. Estilos de Reseteo y Tipografía
+ * ================================== */
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-color);
+    font-size: var(--font-scale-base); /* Fuente base reactiva */
+    margin: 0;
+    padding: 0;
+    transition: background-color 0.3s, color 0.3s;
+    min-height: 100vh;
+}
+
+a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+/* Los encabezados y párrafos deben usar unidades relativas (em/rem)
+   para escalar con --font-scale-base */
+h1, h2, h3, p {
+    color: var(--text-color);
+}
+
+/* ==================================
+ * Topbar y Controles (Posicionamiento y Agrupación)
+ * ================================== */
+
+/* Contenedor fijo en la esquina superior derecha */
+#topbar {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1002; /* Asegura que esté sobre otros elementos */
+    display: flex;
+    gap: 10px; /* Espacio entre los botones */
+    align-items: center;
+}
+
+/* Estilos base para los botones (font y theme) */
+.theme-toggle, .font-control {
+    padding: 8px 12px;
+    cursor: pointer;
+    background-color: var(--bg-secondary);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+/* Estilo para el campo de búsqueda */
+#searchInput {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-secondary);
+    color: var(--text-color);
+    width: 200px; /* Ajusta el ancho según sea necesario */
+    transition: width 0.3s, border-color 0.3s;
+}
+
+#searchInput:focus {
+    border-color: var(--link-color);
+    outline: none;
+}
+
+/* ==================================
+ * 4. Layout General (Sidebar y Main Content)
+ * ================================== */
+
+.main-content-wrapper {
+    margin-left: 275px; /* Espacio para el sidebar abierto */
+    /* 💡 Aumentamos el margen superior para que no choque con la Top Bar */
+    padding-top: 60px; 
+    padding-left: 35px
+    transition: margin-left 0.3s, padding-top 0.3s;
+    min-height: 100vh;
+
+}
+
+#sidebar {
+    width: 250px;
+    height: 100%;
+    position: fixed;
+    top: 0;
+    left: 40px;
+    background-color: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
+    /* 🛑 CORRECCIÓN: Quitamos el padding superior conflictivo */
+    padding-top: 60px; 
+    z-index: 1000;
+    transition: transform 0.3s, background-color 0.3s;
+    overflow-y: auto;
+}
+
+#sidebar.collapsed {
+    transform: translateX(-250px);
+}
+
+#sidebar.collapsed ~ .main-content-wrapper {
+    margin-left: 35px; /* Ocupa el ancho completo cuando el sidebar está colapsado */
+}
+
+/* Botón de Toggle fuera del flujo normal */
+#toggleSidebar {
+    position: fixed;
+    top: 0;
+    left: 205px;
+    z-index: 1001;
+    cursor: pointer;
+    background-color: var(--bg-secondary);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 2em;
+}
+
+/* Estilos de la lista de canales (Sidebar) */
+#sidebar-content {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sidebar-item a {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    color: var(--text-color);
+    text-decoration: none;
+}
+
+.sidebar-item a:hover {
+    background-color: var(--border-color);
+}
+
+/* ==================================
+ * 5. Video Grid (lazy-load.js)
+ * ================================== */
+
+.video-list-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.video-item {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px var(--shadow-color);
+    overflow: hidden;
+    transition: transform 0.2s;
+}
+
+.video-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px var(--shadow-color);
+}
+
+.video-item img {
+    width: 100%;
+    height: auto;
+    display: block;
+    aspect-ratio: 16 / 9; /* Asegura un ratio de imagen consistente */
+    object-fit: cover;
+}
+
+.video-item-content {
+    padding: 10px 15px;
+}
+`;
+
+// Lógica para escribir el archivo (asumiendo que está dentro de una función asíncrona)
+async function generateCss(rootDir) {
+    try {
+        await Deno.mkdir(join(rootDir, 'css'), { recursive: true });
+        await Deno.writeTextFile(OUTPUT_PATH, cssContent);
+        console.log(`  ✅ Generado archivo CSS: ${OUTPUT_PATH}`);
+    } catch (e) {
+        console.error(`ERROR al generar style.css: ${e}`);
+        Deno.exit(1);
+    }
+}
+
+generateCss(rootDir);

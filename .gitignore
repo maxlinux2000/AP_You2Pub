@@ -1,0 +1,16 @@
+# ===============================================
+# Reglas de Ignorado para el repositorio You2Pub
+# ===============================================
+
+# 1. Ignorar todos los archivos en el directorio Videos/ (Ej: videos.mp4, temp.txt, etc.)
+Videos/*
+
+# 2. Excepciones: ¡NO ignorar estas carpetas, permitiendo rastrear su contenido!
+!Videos/css/
+!Videos/js/
+
+# Si tienes otros archivos grandes o temporales que quieres ignorar globalmente:
+*.mp4
+*.bak
+# ignoramos tambien la carpeta OLD
+OLD

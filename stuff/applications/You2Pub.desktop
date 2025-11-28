@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=You2Pub
+Exec=/usr/local/bin/You2Pub
+Icon=/usr/local/share/icons/hicolor/you2pub.png
+Terminal=true
+
+

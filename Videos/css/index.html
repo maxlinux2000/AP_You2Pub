@@ -1,0 +1,77 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canal: css</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- El contenido principal del body no está envuelto en <h1> ni <a> aquí. 
+             generate_root.js ya maneja su propia estructura de encabezado. -->
+        
+        <nav id="sidebar" class="collapsed">
+            <button id="toggleSidebar" title="Alternar menú">☰</button>
+            <div class="sidebar-header">Canales</div>
+            <ul id="sidebar-content">
+                <li class="sidebar-item" style="padding: 10px; color: var(--text-secondary);">Cargando canales...</li>
+            </ul>
+        </nav>
+        
+        <button id="themeToggle" class="theme-toggle">
+            Cambiar Tema
+        </button>
+        
+        <div class="main-content-wrapper">
+            <div class="banner-container-channel">
+                <a href="../index.html" class="home-button-banner" title="Volver a la Página Principal">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                    </svg>
+                </a>
+                <img src="./img/banner.jpg" alt="Banner del Canal css" class="main-banner"/>
+            </div>
+
+            <div class="channel-header">
+                <img src="./img/icon.jpg" alt="Icono de css" class="channel-icon-large">
+                <h1>css</h1>
+                <p class="channel-description">Sin descripción.</p>
+            </div>
+
+            <h2>Videos del Canal (0 videos)</h2>
+            
+            <div id="videoListContainer" class="video-list-grid">
+            </div>
+
+            <div id="loadingSentinel" style="height: 10px; margin-top: 30px; text-align: center;">
+                <p id="loadingMessage" style="color: var(--text-primary);">Cargando más videos...</p>
+            </div>
+        </div>
+        
+        <div style="display:none;">
+            <h2>Todos los Videos de css</h2>
+            
+        </div>
+        
+        <script>
+            // ==========================================
+            // 🎯 DATOS DE LA PÁGINA (NECESARIOS INLINE)
+            // Estos datos son usados por lazy-load.js y menu.js.
+            // ==========================================
+            const ALL_VIDEOS_DATA = [];
+            const VIDEOS_PER_PAGE = 30;
+        </script>
+        
+        <script src="../js/theme-toggle.js"></script>
+        <script src="../js/lazy-load.js"></script>
+        <script src="../js/menu.js"></script>
+    
+    </div>
+    
+    <!-- Scripts cargados por generateHtmlWrapper -->
+     
+
+</body>
+</html>
