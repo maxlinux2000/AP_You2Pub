@@ -48,10 +48,13 @@ async function readSubtitlesContent(videoPath) {
 async function generateVideoPage(videoPath) {
     const videoDirName = basename(videoPath);
     
+    // 🛑 AGREGADO: Obtener el nombre de la carpeta del canal (un nivel arriba)
+    const channelDirName = basename(join(videoPath, '..')); 
+    
     // 🛑 COMPROBACIÓN CRÍTICA DE METADATOS 🛑
     const metadata = await readVideoMetadata(videoPath);
     if (!metadata) {
-        console.error(`   ❌ ERROR: No se pudieron leer los metadatos del video (${videoDirName}). Asegúrate de que existe un archivo *.info.json.`);
+        console.error(`  ❌ ERROR: No se pudieron leer los metadatos del video (${videoDirName}). Asegúrate de que existe un archivo *.info.json.`);
         return; // Salir si no hay metadatos
     }
 
@@ -100,12 +103,26 @@ async function generateVideoPage(videoPath) {
     }
 
     // ⭐️ RUTAS CLAVE PARA EL VIDEO (3 niveles de profundidad) ⭐️
-    // El video está en: <root>/<canal>/<video_id>/index.html
-    const BANNER_PATH = '../img/banner.jpg'; 
+    // El CSS sigue siendo '../../css/style.css'
     const CSS_PATH_RELATIVE = '../../css/style.css'; 
 
     // --- Contenido HTML ---
     const videoPlayer = `
+        <div id="topbar" class="topbar-controls">
+
+            <button id="fontDecrease" class="font-control" title="Disminuir Tamaño de Fuente">A-</button> 
+            <button id="fontIncrease" class="font-control" title="Aumentar Tamaño de Fuente">A+</button>
+            <button id="themeToggle" class="theme-toggle" title="Alternar Modo Claro/Oscuro">
+                Cambiar Tema
+            </button>
+            <a href="../../index.html" class="home-button-banner" title="Volver a la Página Principal">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                </svg>
+            </a>
+    
+        </div>
+
         <nav id="sidebar" class="collapsed">
             <button id="toggleSidebar" title="Alternar menú">☰</button>
             <div class="sidebar-header">Canales</div>
@@ -114,26 +131,16 @@ async function generateVideoPage(videoPath) {
             </ul>
         </nav>
 
-        <button id="themeToggle" class="theme-toggle">
-            Cambiar Tema
-        </button>
-        
         <div class="main-content-wrapper">
-            
+
             <header class="channel-header">
-                <a href=".." class="back-link">← Volver al Índice del Canal</a> 
-                
+
                 <div class="banner-container-channel">
-                    <a href="../../index.html" class="home-button-banner" title="Volver a la Página Principal">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-                        </svg>
-                    </a>
-                    <img src="${BANNER_PATH}" alt="Banner del Canal ${metadata.uploader}" class="main-banner"/>
+                    <img src="../img/banner_${channelDirName}.jpg" alt="Banner del Canal ${metadata.uploader}" class="main-banner"/>
                 </div>
 
                 <h1>${metadata.fulltitle || metadata.title}</h1>
-                <p><strong>Canal:</strong> <a href="..">${metadata.uploader}</a></p>
+                <p><strong>Canal:</strong> <a href="../index.html">${metadata.uploader}</a></p>
                 <p><strong>Fecha de subida:</strong> ${uploadDate}</p>
             </header>
 
@@ -143,10 +150,10 @@ async function generateVideoPage(videoPath) {
                 <source src="./${videoFilename}" type="video/mp4">
                 ${subtitleTracks.join('\n')} Tu navegador no soporta el elemento de video.
             </video>
-            
+        
             <div class="controls-bar">
-                <button id="back30s">⏪ Atrás 30s</button>
-                <button id="forward30s"> Adelante 30s ⏩</button>
+                <button class="buttons" id="back30s">⏪ Atrás 30s</button>
+                <button class="buttons" id="forward30s"> Adelante 30s ⏩</button>
             </div>
 
             <hr>
@@ -188,9 +195,10 @@ async function generateVideoPage(videoPath) {
             <a href="../../menu.html">Ver lista completa de canales para indexación</a>
         </div>
 
-        <script src="../../js/theme-toggle.js"></script>
-        <script src="../../js/menu.js"></script>
-        <script src="../../js/video-page.js"></script>
+        <script src="../../js/theme-toggle.js" defer></script>
+        <script src="../../js/font-size.js" defer></script> 
+        <script src="../../js/menu.js" type="module" defer></script>
+        <script src="../../js/video-page.js" defer></script>
     `;
 
     // 5. Generar la página HTML completa
@@ -198,7 +206,7 @@ async function generateVideoPage(videoPath) {
 
     const htmlContent = generateHtmlWrapper(metadata.title, videoPlayer, CSS_PATH);
     await Deno.writeTextFile(join(videoPath, OUTPUT_FILENAME), htmlContent);
-    console.log(`   ✅ Generada página de video: ${videoDirName}`);
+    console.log(`  ✅ Generada página de video: ${videoDirName}`);
 }
 
 generateVideoPage(videoPath);
