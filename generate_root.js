@@ -113,7 +113,7 @@ async function generateIndexPage(rootDir) {
         const menuData = JSON.parse(jsContent);
 
         const listItems = menuData.map(channel => `
-            <li><a href="${channel.url}">${channel.name}</a></li>
+            <li><a href="./${channel.name}/index.html">${channel.name}</a></li>
         `).join('');
 
         staticChannelListHtml = `
