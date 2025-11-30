@@ -35,6 +35,32 @@ case "$RESOLUTION_ARGUMENT" in
         ;;
 esac
 
+######################################
+# Saneador Titulos Playlist
+######################################
+sanear_string() {
+    local string_original="$1"
+    
+    # 1. Limpieza Previa (Eliminar caracteres de control)
+    local string_intermedia_1
+    string_intermedia_1=$(echo "$string_original" | tr -d '\000-\011\013\014\016-\037')
+    
+    # 2. Normalización (NBSP y asegurar UTF-8)
+    local string_intermedia_3
+    # 2A. Reemplazar Non-Breaking Space por espacio normal
+    string_intermedia_3=$(echo "$string_intermedia_1" | sed 's/\xc2\xa0/ /g')
+    # 2B. Asegurar codificación UTF-8
+    string_intermedia_3=$(echo "$string_intermedia_3" | iconv -t UTF-8 -f UTF-8 -c)
+    
+    # 3. Escapado Final (Seguridad Bash)
+    local string_saneada
+    string_saneada=$(printf '%q' "$string_intermedia_3")
+    
+    echo "$string_saneada"
+}
+
+
+
 
 # ----------------------------------------------------------------------------------
 # 🔑 PASO A: Obtener Metadatos, Crear Carpeta, Mover JSON y Cambiar de Directorio (cd)
@@ -58,10 +84,10 @@ fi
 
 # 2. Usar jq para extraer el nombre del canal con playlist_channel
 
-RAW_NAME=$(cat "$METADATA_TEMP_FILE" | jq -r '.playlist_channel' | head -n1)
+RAW_NAME=$(cat "$METADATA_TEMP_FILE" | jq -r ".playlist_uploader_id" | head -n1 | tr -d '@' | sed 's| |_|g')
 
 # 3. Limpiar el nombre del Uploader (Eliminar el '@' si existe, para un nombre de carpeta limpio)
-UPLOADER_NAME=$(echo "$RAW_NAME" | tr -d '@')
+UPLOADER_NAME=$(sanear_string "$RAW_NAME")
 
 echo UPLOADER_NAME=$UPLOADER_NAME
 
@@ -96,7 +122,8 @@ yt-dlp \
 
 # 6.2. Bajamos el icono del canal
 mkdir -p img
-IconUrl=$(jq '.thumbnails' metadatos_base.json  | grep "url" | cut -d '"' -f4 | tail -n1 )
+#IconUrl=$(jq '.thumbnails' metadatos_base.json  | grep "url" | cut -d '"' -f4 | tail -n1 )
+IconUrl=$(jq -r '.thumbnails[] | select(.id == "avatar_uncropped") | .url' channel.info.json) #'
 wget "$IconUrl" -O ./img/icon.png 2>/dev/null
 
 # 6.3. Bajamos el banner del canal
@@ -164,8 +191,7 @@ for VIDEO_ID in "${VIDEO_IDS[@]}"; do
     echo -e "${GREEN}  ✔ Ubicación actual (Carpeta de video): $(pwd)${NC}"
 
     # --- C2. Pausa de cortesía entre videos ---
-    # Usando tus rangos de pausa (7-21s)
-    RANDOM_BREAK=$(shuf -i 7-21 -n 1)
+    RANDOM_BREAK=$(shuf -i 14-38 -n 1)
     if [ "$PROCESSED_COUNT" -gt 1 ]; then
         echo -e "  Esperando ${CYAN}$RANDOM_BREAK${NC} segundos antes de iniciar la descarga del video..."
         sleep "$RANDOM_BREAK"
@@ -193,64 +219,16 @@ for VIDEO_ID in "${VIDEO_IDS[@]}"; do
 
     if [ $EXIT_CODE_PHASE1 -ne 0 ]; then
         echo -e "${RED}  ❌ ERROR FASE 1: Fallo al descargar video ID $VIDEO_ID. Saltando subtítulos.${NC}"
+        # Volver al directorio principal del canal/lista antes de continuar el bucle
         cd ..
         continue
     fi
     echo -e "  ${GREEN}✔ Descarga del video principal completada.${NC}"
 
-#    # --- C4. Pausa Obligatoria entre Fases (Aleatoria 9-27s) ---
-#    # Usando tus rangos de pausa (9-27s)
-#    RANDOM_SLEEP_BREAK=$(shuf -i 31-45 -n 1)
-#    echo -e "  Esperando ${CYAN}$RANDOM_SLEEP_BREAK${NC} segundos antes de descargar los subtítulos...${NC}"
-#    sleep "$RANDOM_SLEEP_BREAK"
-#
-#    # --- C5. FASE 2: Descargar Subtítulos (UNO POR UNO) ---
-#    echo -e "  ${CYAN}--- FASE 2/2: Descargando Subtítulos Idioma por Idioma (formato VTT) ---${NC}"
-#    
-#    LANGUAGES_ARRAY=$(echo "$SUBTITLE_LANGUAGES" | tr ',' ' ')
-#    SUBTITLE_SUCCESS=0
-#    SUBTITLE_ATTEMPTS=0
-#    
-#    # Patrón de salida: ID.ext (ej: Dts7KcHk1_k.es.vtt)
-#    # El comando es idéntico a tu script 3 modificado.
-#    for LANG_CODE in $LANGUAGES_ARRAY; do
-#        SUBTITLE_ATTEMPTS=$((SUBTITLE_ATTEMPTS + 1))
-#        
-#        # Comando de descarga de subtítulos
-#        yt-dlp \
-#        --cookies-from-browser firefox \
-#        --write-sub  \
-#        --write-auto-sub \
-#        --sub-format vtt \
-#        --sub-lang "$LANG_CODE" \
-#        -o "%(id)s.%(ext)s"  \
-#        --skip-download  -- "$VIDEO_ID" 
-#
-#        EXIT_CODE_LANG=$?
-#        if [ $EXIT_CODE_LANG -eq 0 ]; then
-#            SUBTITLE_SUCCESS=$((SUBTITLE_SUCCESS + 1))
-#            echo -e "  ${GREEN}    ✔ Subtítulo $LANG_CODE descargado con éxito.${NC}"
-#        elif [ $EXIT_CODE_LANG -ne 1 ]; then
-#            echo -e "${RED}  ⚠️ ADVERTENCIA: Error al descargar subtítulo $LANG_CODE (Código $EXIT_CODE_LANG).${NC}"
-#        fi
-#        
-#        # Pausa aleatoria entre idiomas
-#        if [ "$LANG_CODE" != "$(echo "$SUBTITLE_LANGUAGES" | rev | cut -d',' -f1 | rev)" ]; then
-#            # Usando tus rangos de pausa (14-37s)
-#            RANDOM_PAUSE_LANG=$(shuf -i 32-57 -n 1)
-#            echo -e "  Esperando ${CYAN}$RANDOM_PAUSE_LANG${NC} segundos antes del siguiente idioma..."
-#            sleep "$RANDOM_PAUSE_LANG"
-#        fi
-#        
-#    done # Fin del ciclo for de subtítulos
-#
-#    if [ $SUBTITLE_SUCCESS -gt 0 ]; then
-#        echo -e "  ${GREEN}✔ Subtítulos: $SUBTITLE_SUCCESS de $SUBTITLE_ATTEMPTS idiomas intentados se descargaron con éxito.${NC}"
-#    else
-#        echo -e "${RED}  ⚠️ ADVERTENCIA FASE 2: No se pudo descargar ningún subtítulo para ID $VIDEO_ID.${NC}"
-#    fi
-
-
+    # --- C4. Pausa Obligatoria entre Fases (Aleatoria 3-8s) ---
+    RANDOM_SLEEP_BREAK=$(shuf -i 27-48 -n 1)
+    echo -e "  Esperando ${CYAN}$RANDOM_SLEEP_BREAK${NC} segundos antes de descargar los subtítulos...${NC}"
+    sleep "$RANDOM_SLEEP_BREAK"
 
 # --- C5. FASE 2: Descargar Subtítulos (UNO POR UNO) ---
 echo -e "  ${CYAN}--- FASE 2/2: Descargando Subtítulos Idioma por Idioma (formato VTT) ---${NC}"

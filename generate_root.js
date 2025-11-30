@@ -176,7 +176,7 @@ async function generateIndexPage(rootDir) {
         <script src="./js/theme-toggle.js" defer></script>
         <script src="./js/lazy-load.js" defer></script>
         <script src="./js/font-size.js" defer></script>
-        <script src="./js/menu.js" type="module" defer></script> 
+        <script src="./js/menu_root.js" type="module"></script> 
     `;
 
     // 7. Generar la página HTML usando el wrapper

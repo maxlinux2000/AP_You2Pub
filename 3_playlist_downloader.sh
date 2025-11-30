@@ -35,6 +35,32 @@ case "$RESOLUTION_ARGUMENT" in
         ;;
 esac
 
+######################################
+# Saneador Titulos Playlist
+######################################
+sanear_string() {
+    local string_original="$1"
+    
+    # 1. Limpieza Previa (Eliminar caracteres de control)
+    local string_intermedia_1
+    string_intermedia_1=$(echo "$string_original" | tr -d '\000-\011\013\014\016-\037')
+    
+    # 2. Normalización (NBSP y asegurar UTF-8)
+    local string_intermedia_3
+    # 2A. Reemplazar Non-Breaking Space por espacio normal
+    string_intermedia_3=$(echo "$string_intermedia_1" | sed 's/\xc2\xa0/ /g')
+    # 2B. Asegurar codificación UTF-8
+    string_intermedia_3=$(echo "$string_intermedia_3" | iconv -t UTF-8 -f UTF-8 -c)
+    
+    # 3. Escapado Final (Seguridad Bash)
+    local string_saneada
+    string_saneada=$(printf '%q' "$string_intermedia_3")
+    
+    echo "$string_saneada"
+}
+
+
+
 
 # ----------------------------------------------------------------------------------
 # 🔑 PASO A: Obtener Metadatos, Crear Carpeta, Mover JSON y Cambiar de Directorio (cd)
@@ -57,10 +83,12 @@ if [ $? -ne 0 ]; then
 fi
 
 # 2. Usar jq para extraer el nombre de la playlist
-RAW_NAME=$(cat "$METADATA_TEMP_FILE" | jq -r '.playlist' | head -n1)
+RAW_NAME=$(cat "$METADATA_TEMP_FILE" | jq -r '.playlist' | head -n1 | sed 's| |_|g')
 
 # 3. Limpiar el nombre de Uploader/ID (Eliminar el '@' si existe, para un nombre de carpeta limpio)
-UPLOADER_NAME=$(echo "$RAW_NAME" | tr -d '@')
+UPLOADER_NAME=$(sanear_string "$RAW_NAME")
+
+echo UPLOADER_NAME=$UPLOADER_NAME
 
 # 4. Determinar el nombre final de la carpeta (Carpeta principal del canal/lista)
 FINAL_TARGET_DIR="$DOWNLOAD_ROOT/$UPLOADER_NAME"
@@ -81,9 +109,44 @@ fi
 
 echo -e "${GREEN}✔ Ubicación actual (Carpeta de canal/lista): $(pwd)${NC}"
 
+# 6.1. Descargamos channel.info.json para obtener la descripcion del canal icono y banner
+
+yt-dlp \
+    --cookies-from-browser  firefox  \
+    --skip-download \
+    --write-info-json \
+    --playlist-items 0 \
+    "$ID_O_URL" \
+    -o channel.json
+
+# 6.2. Bajamos el icono del canal
+mkdir -p img
+#IconUrl=$(jq '.thumbnails' metadatos_base.json  | grep "url" | cut -d '"' -f4 | tail -n1 )
+IconUrl=$(jq -r '.thumbnails[] | select(.id == "0") | .url' channel.info.json) #'
+
+wget "$IconUrl" -O ./img/icon.png 2>/dev/null
+
+
+wget "$IconUrl" -O ./img/icon.png 2>/dev/null
+
+# 6.3. Bajamos el banner del canal
+BANNER_URL=$(jq -r '.thumbnails[] | select(.id == "banner_uncropped").url' channel.info.json) #'
+# Define el nombre de archivo usando el nombre de usuario
+CLEAN_NAME=$(echo "$ID_O_URL" | cut -d '@' -f2)
+OUTPUT_FILENAME="banner_${CLEAN_NAME}.jpg"
+echo "✔ URL del Banner encontrada. Descargando..."
+# 6.3. Descargar la imagen
+wget -O ./img/"$OUTPUT_FILENAME" "$BANNER_URL" 2>/dev/null
+
+# 6.4 checks
+if [ $? -eq 0 ] && [ -s ./img/"$OUTPUT_FILENAME" ]; then
+    echo "✔ Banner guardado con éxito como: $OUTPUT_FILENAME"
+else
+    echo "❌ ERROR: Fallo al descargar el archivo."
+fi
+
 # 6.5. Añadimos un fichero con dentro la url de la playlist y la resolución de descarga original
 echo "$ID_O_URL,$RESOLUTION_ARGUMENT" > xcron
-
 
 # ----------------------------------------------------------------------------------
 # 🔑 PASO B: Obtener Lista de IDs
@@ -170,53 +233,66 @@ for VIDEO_ID in "${VIDEO_IDS[@]}"; do
     echo -e "  Esperando ${CYAN}$RANDOM_SLEEP_BREAK${NC} segundos antes de descargar los subtítulos...${NC}"
     sleep "$RANDOM_SLEEP_BREAK"
 
-    # --- C5. FASE 2: Descargar Subtítulos (UNO POR UNO) ---
-    echo -e "  ${CYAN}--- FASE 2/2: Descargando Subtítulos Idioma por Idioma (formato VTT) ---${NC}"
+# --- C5. FASE 2: Descargar Subtítulos (UNO POR UNO) ---
+echo -e "  ${CYAN}--- FASE 2/2: Descargando Subtítulos Idioma por Idioma (formato VTT) ---${NC}"
     
-    LANGUAGES_ARRAY=$(echo "$SUBTITLE_LANGUAGES" | tr ',' ' ')
-    SUBTITLE_SUCCESS=0
-    SUBTITLE_ATTEMPTS=0
+LANGUAGES_ARRAY=$(echo "$SUBTITLE_LANGUAGES" | tr ',' ' ')
+SUBTITLE_SUCCESS=0
+SUBTITLE_ATTEMPTS=0
     
-    # Nuevo patrón de salida de subtítulos: SOLO CÓDIGO_IDIOMA.EXT (ej: es.vtt)
-    SUBTITLE_OUTPUT_PATTERN="%(language)s.%(ext)s"
-    
+# Patrón de salida: ID.ext (ej: Dts7KcHk1_k.es.vtt)
+
     for LANG_CODE in $LANGUAGES_ARRAY; do
         SUBTITLE_ATTEMPTS=$((SUBTITLE_ATTEMPTS + 1))
-        
-        # Comando de descarga de subtítulos
-        yt-dlp \
+    
+        # 1. Ejecutar yt-dlp y CAPTURAR LA SALIDA DE ERROR (stderr) en YTDLP_ERROR
+        # 2>&1 redirige stderr a stdout, y la subshell $(...) captura todo.
+        YTDLP_ERROR=$(yt-dlp \
         --cookies-from-browser firefox \
         --write-sub  \
         --write-auto-sub \
         --sub-format vtt \
         --sub-lang "$LANG_CODE" \
         -o "%(id)s.%(ext)s"  \
-        --skip-download  -- "$VIDEO_ID" 
+        --skip-download  -- "$VIDEO_ID" 2>&1 >/dev/null) # Redirige salida normal a /dev/null
+    
+        EXIT_CODE_LANG=$? # Capturamos el código de salida
 
-        EXIT_CODE_LANG=$?
+        # 2. COMPROBACIÓN CRÍTICA DEL ERROR 429
+        if echo "$YTDLP_ERROR" | grep -q "429"; then
+            echo -e "${RED}🚨 LÍMITE 429 DETECTADO! Se detiene la descarga de subtítulos para el video actual.${NC}"
+            break # 🛑 ¡SALIR DEL BUCLE DE IDIOMAS!
+        fi
+    
+        # 3. COMPROBACIÓN DE ÉXITO (Lógica original)
         if [ $EXIT_CODE_LANG -eq 0 ]; then
             SUBTITLE_SUCCESS=$((SUBTITLE_SUCCESS + 1))
             echo -e "  ${GREEN}    ✔ Subtítulo $LANG_CODE descargado con éxito.${NC}"
         elif [ $EXIT_CODE_LANG -ne 1 ]; then
             echo -e "${RED}  ⚠️ ADVERTENCIA: Error al descargar subtítulo $LANG_CODE (Código $EXIT_CODE_LANG).${NC}"
         fi
-        
+    
         # Pausa aleatoria entre idiomas
+        # Si no se detectó el 429, continuamos con la pausa normal
         if [ "$LANG_CODE" != "$(echo "$SUBTITLE_LANGUAGES" | rev | cut -d',' -f1 | rev)" ]; then
-            RANDOM_PAUSE_LANG=$(shuf -i 28-47 -n 1)
+            RANDOM_PAUSE_LANG=$(shuf -i 32-57 -n 1)
             echo -e "  Esperando ${CYAN}$RANDOM_PAUSE_LANG${NC} segundos antes del siguiente idioma..."
             sleep "$RANDOM_PAUSE_LANG"
         fi
-        
+    
     done # Fin del ciclo for de subtítulos
 
     if [ $SUBTITLE_SUCCESS -gt 0 ]; then
         echo -e "  ${GREEN}✔ Subtítulos: $SUBTITLE_SUCCESS de $SUBTITLE_ATTEMPTS idiomas intentados se descargaron con éxito.${NC}"
     else
+        # Aquí ya no hay necesidad de un mensaje de advertencia 429 específico,
+        # porque ya lo reportamos justo al detectarlo.
         echo -e "${RED}  ⚠️ ADVERTENCIA FASE 2: No se pudo descargar ningún subtítulo para ID $VIDEO_ID.${NC}"
     fi
 
-    # --- C6. VOLVER AL DIRECTORIO PRINCIPAL DEL CANAL/LISTA ---
+
+
+    # --- C6. VOLVER AL DIRECTORIO PRINCIPAL DEL CANAL ---
     cd ..
     echo -e "${GREEN}✔ Saliendo de la carpeta de video. Ubicación actual: $(pwd)${NC}"
 

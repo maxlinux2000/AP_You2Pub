@@ -197,7 +197,7 @@ async function generateVideoPage(videoPath) {
 
         <script src="../../js/theme-toggle.js" defer></script>
         <script src="../../js/font-size.js" defer></script> 
-        <script src="../../js/menu.js" type="module" defer></script>
+        <script src="../../js/menu_video.js" type="module" defer></script>
         <script src="../../js/video-page.js" defer></script>
     `;
 

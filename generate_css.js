@@ -228,7 +228,7 @@ h1, h2, h3, p {
 #toggleSidebar {
     position: fixed;
     top: 0;
-    left: 205px;
+    left: 195px;
     z-index: 1001;
     cursor: pointer;
     background-color: var(--bg-secondary);
@@ -258,7 +258,7 @@ h1, h2, h3, p {
     background-color: var(--border-color);
 }
 
-.SideBarIcons {
+.menu-icon {
     width: 60px;
     height: 60px;
     margin-right:5px;

@@ -10,8 +10,13 @@ export const menuData = [
         "icon": "./QUIMICA EDUCALIFE/img/icon.png"
     },
     {
-        "name": "Química del Mal",
-        "url": "./Química del Mal/index.html",
-        "icon": "./Química del Mal/img/icon.png"
+        "name": "QuimicadelMal",
+        "url": "./QuimicadelMal/index.html",
+        "icon": "./QuimicadelMal/img/icon.png"
+    },
+    {
+        "name": "RETI_Private_AP",
+        "url": "./RETI_Private_AP/index.html",
+        "icon": "./RETI_Private_AP/img/icon.png"
     }
 ];
