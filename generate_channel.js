@@ -13,7 +13,7 @@ if (!channelPath) {
 }
 
 // 💡 Parámetro de paginación
-const VIDEOS_PER_PAGE = 30; // Cantidad de videos a cargar inicialmente y por bloque.
+const VIDEOS_PER_PAGE = 16; // Cantidad de videos a cargar inicialmente y por bloque.
 
 // 🎯 FUNCIÓN PRINCIPAL MODIFICADA
 async function generateChannelPage(channelPath) {
@@ -44,8 +44,16 @@ async function generateChannelPage(channelPath) {
     try {
         const channelInfoPath = join(channelPath, 'channel.info.json');
         const channelInfo = JSON.parse(await Deno.readTextFile(channelInfoPath));
-        channelTitle = channelInfo.channel || channelName;
+        // 1. Obtener el título con la cadena de respaldo y limpiarlo
+        channelTitle = channelInfo.title || channelInfo.channel || channelName;
+        // 💡 CORRECCIÓN AQUÍ: Eliminar la subcadena " - Videos"
+        channelTitle = channelTitle.replace(' - Videos', '');
+        // 2. Obtener la descripción
         channelDescription = channelInfo.description || channelDescription;
+        // 💡 3. CORRECCIÓN: Convertir saltos de línea (\n) a etiquetas HTML <br>
+        channelDescription = channelDescription.replace(/\n/g, '<br>');
+
+
     } catch (_e) {
         console.warn("   ⚠️ No se pudo leer 'channel.info.json'. Usando valores por defecto.");
     }
@@ -133,8 +141,8 @@ async function generateChannelPage(channelPath) {
     // 🛑 NUEVA LÓGICA DE DETECCIÓN DE IMÁGENES
     // ===========================================
     const IMG_DIR = join(channelPath, 'img');
-    let BANNER_PATH = './img/placeholder-banner.jpg'; // Valor por defecto
-    let ICON_PATH = './img/placeholder-icon.png';    // Valor por defecto
+    let BANNER_PATH = './img/banner.jpg'; // Valor por defecto
+    let ICON_PATH = './img/icon.png';    // Valor por defecto
 
     try {
         for await (const fileEntry of Deno.readDir(IMG_DIR)) {
@@ -150,6 +158,10 @@ async function generateChannelPage(channelPath) {
             if (filename.startsWith('banner_') && (filename.endsWith('.jpg') || filename.endsWith('.jpeg'))) {
                 BANNER_PATH = `./img/${filename}`;
             }
+            // Imagen banner de fallback. En este caso se usa el banner de You2Pub
+            //if (filename.startsWith('banner') && (filename.endsWith('.jpg') || filename.endsWith('.jpeg'))) {
+            //    BANNER_PATH = `../css/${filename}`;
+            //}
         }
     } catch (e) {
         console.warn(`   ⚠️ No se pudo leer la carpeta 'img' en ${channelName}. Usando placeholders.`);
@@ -169,8 +181,6 @@ async function generateChannelPage(channelPath) {
                     <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
                 </svg>
             </a>
-
-
         </div>
 
 

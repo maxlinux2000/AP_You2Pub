@@ -12,6 +12,7 @@ Videos/*
 # Si tienes otros archivos grandes o temporales que quieres ignorar globalmente:
 *.mp4
 *.bak
+*.tmp
 # ignoramos tambien la carpeta OLD
 OLD
 

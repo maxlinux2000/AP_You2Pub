@@ -1,266 +1,337 @@
 #!/bin/bash
-
 # ===============================================
-# 4_consolidator.sh
-# Verifica la integridad de los videos y subtítulos descargados y reintenta
-# la descarga de archivos faltantes o corruptos. Lee la resolución desde
-# el archivo 'xcron' de cada carpeta principal.
-# Uso: ./4_consolidator.sh
+# CONSOLIDADOR.sh
+# Verifica la integridad de los videos y la presencia de metadatos (JSON, Thumbnail, VTT).
+# Intenta reparar o descargar archivos faltantes o corruptos.
 # ===============================================
 
-# --- Constantes de Directorio y Archivos ---
-DOWNLOAD_ROOT="Videos" 
-ID_LIST_FILENAME="video_ids_for_download.txt"
-XCRON_FILENAME="xcron"
-SUBTITLE_LANGUAGES="es,en,fr,de,pt,it,ru,zh,ja" # Lista de idiomas a verificar
-VIDEO_FILENAME_PATTERN="%(id)s.%(ext)s" # El patrón usado en los scripts de descarga
-VIDEO_EXTENSION="mp4"
-THUMBNAIL_EXTENSION="jpg"
+# --- Constantes ---
+DOWNLOAD_ROOT="Videos"
+SUBTITLE_LANGUAGES="es,en,fr,de,pt,it,ru,zh,ja"
+VIDEO_FORMAT_FILTER="" 
 
 # Colores
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
-# ----------------------------------------------------------------------------------
-# 🛠️ FUNCIONES DE VERIFICACIÓN Y REPARACIÓN
-# ----------------------------------------------------------------------------------
 
-# Verifica la integridad del archivo de video usando ffprobe.
-# Retorna 0 si es OK, 1 si falla o no existe.
-check_video_integrity() {
-    local VIDEO_FILE="$1"
+cuenta_atras_segura() {
+    seconds=$(shuf -i 183-307 -n 1); date1=$((`date +%s` + $seconds)); 
+    while [ "$date1" -ge `date +%s` ]; do 
+      echo -ne "Tempo faltante: $(date -u --date @$(($date1 - `date +%s` )) +%H:%M:%S)\r"; 
+    done
+    # 3. Pausa Decimal Aleatoria Final
+    sleep "0.$(shuf -i 1-99 -n 1)"
+}
+
+
+# Verificar que FFPROBE está disponible para la comprobación de integridad
+if ! command -v ffprobe &> /dev/null; then
+    echo -e "${RED}❌ ERROR: El comando 'ffprobe' no se encontró. Necesario para verificar la integridad de los videos.${NC}"
+    echo "Instale FFmpeg/FFprobe e intente de nuevo."
+    exit 1
+fi
+
+# ===================================================================
+# FUNCIONES DE AYUDA Y VERIFICACIÓN
+# ===================================================================
+
+# Función para configurar el filtro de formato basado en la resolución (SD o HD)
+configurar_filtro_formato() {
+    local resolution_arg="$1"
     
-    if [ ! -f "$VIDEO_FILE" ]; then
-        echo -e "  [FAIL] Video no encontrado: ${RED}$VIDEO_FILE${NC}"
+    case "$resolution_arg" in
+        "SD")
+            VIDEO_FORMAT_FILTER="bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+            ;;
+        "HD")
+            VIDEO_FORMAT_FILTER="bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+            ;;
+        *)
+            # Valor de respaldo si no se encuentra o es inválido
+            VIDEO_FORMAT_FILTER="bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+            echo -e "  ${YELLOW}⚠️ ADVERTENCIA: Resolución '$resolution_arg' desconocida. Usando filtro HD (720p) por defecto.${NC}"
+            ;;
+    esac
+}
+
+
+# Función para verificar la integridad del archivo MP4 usando ffprobe.
+# Retorna 0 si es íntegro, 1 si está incompleto o corrupto.
+verificar_integridad_mp4() {
+    local video_file="$1"
+    
+    # 1. Verificar existencia del archivo
+    if [ ! -f "$video_file" ]; then
+        echo -e "  ${RED}❌ MP4 faltante.${NC}"
         return 1
     fi
 
-    # ffprobe retorna 1 si no puede leer los metadatos de duración (corrupto/incompleto)
-    # Suprimimos la salida con -v error
-    # Necesitas tener ffprobe/ffmpeg instalado para que esta comprobación funcione.
-    ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$VIDEO_FILE" > /dev/null 2>&1
-    if [ $? -ne 0 ]; then
-        echo -e "  [FAIL] Video encontrado, pero ${RED}parece corrupto/incompleto${NC}."
+    # 2. Verificar si es un archivo de tamaño cero
+    if [ ! -s "$video_file" ]; then
+        echo -e "  ${RED}❌ MP4 encontrado, pero tiene tamaño cero.${NC}"
+        return 1
+    fi
+
+    # 3. Usar ffprobe para verificar si tiene streams válidos y duración.
+    if ! ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$video_file" &> /dev/null; then
+        echo -e "  ${RED}❌ MP4 encontrado, pero parece estar incompleto o corrupto (ffprobe falló).${NC}"
         return 1
     fi
     
-    echo -e "  [OK] Video principal verificado."
+    echo -e "  ${GREEN}✔ MP4 encontrado e íntegro.${NC}"
     return 0
 }
 
 # ----------------------------------------------------------------------------------
-# 🔑 PASO A: Consolidar la lista de IDs de videos
+# 🔑 FASE PRINCIPAL: Recorrer Canales y Videos
 # ----------------------------------------------------------------------------------
 
-echo -e "\n${YELLOW}=== Paso A: Consolidando todos los IDs de videos... ===${NC}"
+# 💡 CORRECCIÓN: Guardamos el directorio de inicio de la shell principal.
+START_DIR=$(pwd)
 
-# 1. Buscar y concatenar todos los archivos ID_LIST_FILENAME, y obtener IDs únicos
-mapfile -t ALL_VIDEO_IDS < <(find "$DOWNLOAD_ROOT" -name "$ID_LIST_FILENAME" -exec cat {} + 2>/dev/null | sort -u)
+echo -e "\n${YELLOW}===================================================================${NC}"
+echo -e "${YELLOW}🚀 Iniciando Consolidación y Verificación de Videos y Metadatos...${NC}"
+echo -e "${YELLOW}===================================================================${NC}"
 
-if [ ${#ALL_VIDEO_IDS[@]} -eq 0 ]; then
-    echo -e "${RED}❌ No se encontraron IDs de video para procesar en '$DOWNLOAD_ROOT'.${NC}"
-    exit 0
-fi
-
-TOTAL_VIDEOS=${#ALL_VIDEO_IDS[@]}
-echo -e "${GREEN}✔ Encontrados $TOTAL_VIDEOS IDs únicos para verificar.${NC}"
-
-# ----------------------------------------------------------------------------------
-# 🔑 PASO B: Iteración y Verificación
-# ----------------------------------------------------------------------------------
-PROCESSED_COUNT=0
-
-for VIDEO_ID in "${ALL_VIDEO_IDS[@]}"; do
-    PROCESSED_COUNT=$((PROCESSED_COUNT + 1))
-    NEEDS_REPAIR=0 # Flag para saber si se necesita pausar
-
-    echo -e "\n${YELLOW}===================================================================${NC}"
-    echo -e "${YELLOW}🔍 Verificando Video $PROCESSED_COUNT de $TOTAL_VIDEOS: ID ${CYAN}$VIDEO_ID${NC}"
-    echo -e "${YELLOW}===================================================================${NC}"
-
-    # 1. Buscar la ubicación del directorio del video (ej: Videos/Prueba/NTuUaUuoaL0)
-    VIDEO_DIR=$(find "$DOWNLOAD_ROOT" -type d -name "$VIDEO_ID" -print -quit 2>/dev/null)
-
-    if [ -z "$VIDEO_DIR" ]; then
-        echo -e "${RED}  ❌ ERROR: No se encontró la carpeta para el ID $VIDEO_ID. Saltando.${NC}"
+# Recorrer todos los directorios de canales en la carpeta raíz
+find "$DOWNLOAD_ROOT" -mindepth 1 -maxdepth 1 -type d | while read -r CHANNEL_DIR; do
+    CHANNEL_NAME=$(basename "$CHANNEL_DIR")
+    echo -e "\n${CYAN}>>> CANAL: $CHANNEL_NAME ${NC}"
+    
+    # 💡 CAMBIO CLAVE: Usamos PUSHD para entrar al directorio del canal.
+    # > /dev/null es para suprimir el output por defecto de pushd
+    if ! pushd "$CHANNEL_DIR" > /dev/null; then
+        echo -e "${RED}❌ ERROR: No se pudo entrar a $CHANNEL_DIR. Saltando.${NC}"
         continue
     fi
-
-    # 2. Obtener el directorio padre (donde se encuentra xcron)
-    PARENT_DIR=$(dirname "$VIDEO_DIR")
-    XCRON_FILE="$PARENT_DIR/$XCRON_FILENAME"
-    VIDEO_FORMAT_FILTER="" # Resetear filtro
-
-    # 3. Extraer la resolución y establecer el filtro de formato
-    if [ -f "$XCRON_FILE" ]; then
-        # Comando para extraer la resolución del archivo xcron
-        RESOLUTION_ARGUMENT=$(cat "$XCRON_FILE" | cut -d ',' -f2 | tr -d '\n\r ' ) # Quitamos espacios y saltos de línea
-        RESOLUTION_ARGUMENT_UPPER=$(echo "$RESOLUTION_ARGUMENT" | tr '[:lower:]' '[:upper:]')
+    
+    # Leer la URL del canal y la resolución original (si existe)
+    if [ -f xcron ]; then
+        read -r CHANNEL_URL RESOLUTION_ARGUMENT <<< "$(cat xcron | tr ',' ' ')"
+        echo -e "  ${BLUE}Info: URL de origen: $CHANNEL_URL | Res. Original: $RESOLUTION_ARGUMENT${NC}"
         
-        echo -e "  Resolución de descarga: ${CYAN}$RESOLUTION_ARGUMENT_UPPER${NC}"
-
-        case "$RESOLUTION_ARGUMENT_UPPER" in
-            "SD")
-                VIDEO_FORMAT_FILTER="bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
-                ;;
-            "HD")
-                VIDEO_FORMAT_FILTER="bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
-                ;;
-            *)
-                echo -e "${RED}  ❌ ADVERTENCIA: Resolución '$RESOLUTION_ARGUMENT' inválida. La reparación de video será saltada.${NC}"
-                ;;
-        esac
+        # 💡 CAMBIO: Configurar el filtro de formato basado en xcron
+        configurar_filtro_formato "$RESOLUTION_ARGUMENT"
+        echo -e "  ${BLUE}Filtro de formato YT-DLP establecido según la resolución: $RESOLUTION_ARGUMENT${NC}"
     else
-        echo -e "${RED}  ❌ ERROR: Archivo $XCRON_FILENAME no encontrado en $PARENT_DIR. La reparación de video será saltada.${NC}"
+        echo -e "  ${RED}❌ ADVERTENCIA: No se encontró el archivo xcron. Usando filtro HD por defecto.${NC}"
+        CHANNEL_URL=""
+        configurar_filtro_formato "HD"
     fi
 
-    # 4. Cambiar al directorio del video para trabajar con rutas relativas
-    CURRENT_WORKING_DIR=$(pwd)
-    if ! cd "$VIDEO_DIR"; then
-        echo -e "${RED}  ❌ ERROR: No se pudo entrar al directorio $VIDEO_DIR. Saltando.${NC}"
+    # -------------------------------------------------------------
+    # --- 1. Iterar sobre los IDs de VIDEO usando el archivo de lista ---
+    # -------------------------------------------------------------
+    ID_LIST_FILE="video_ids_for_download.txt"
+
+    if [ ! -f "$ID_LIST_FILE" ]; then
+        echo -e "  ${RED}❌ ERROR: Archivo de lista '$ID_LIST_FILE' no encontrado en el canal. Saltando videos.${NC}"
+        # 💡 CORRECCIÓN: Si falla aquí, salimos del PUSHD del canal
+        popd > /dev/null 
         continue
     fi
-    echo -e "${GREEN}  Ubicación: $(pwd)${NC}"
 
+    echo -e "  ${GREEN}✔ Lista de IDs encontrada. Procesando videos...${NC}"
 
-    # ---------------------------------------------------
-    # B1. VERIFICAR VIDEO PRINCIPAL
-    # ---------------------------------------------------
-    VIDEO_FILE="$VIDEO_ID.$VIDEO_EXTENSION"
-    if ! check_video_integrity "$VIDEO_FILE"; then
-        NEEDS_REPAIR=1
-        if [ -n "$VIDEO_FORMAT_FILTER" ]; then
-            echo -e "  ${CYAN}--- REPARACIÓN: Reintentando descarga del Video Principal ($RESOLUTION_ARGUMENT_UPPER) ---${NC}"
+    # Leer cada ID del archivo
+    while read -r VIDEO_ID_RAW; do
+        
+        # Limpieza: Eliminar posibles espacios en blanco o retornos de carro
+        VIDEO_ID=$(echo "$VIDEO_ID_RAW" | tr -d '[:space:]')
+        
+        # Asegurarse de que el ID es un valor no vacío
+        if [ -z "$VIDEO_ID" ]; then
+            continue
+        fi
+
+        echo -e "\n${YELLOW}--- Video: $VIDEO_ID ---${NC}"
+
+        # 1. Crear la carpeta si no existe y entrar
+        mkdir -p "$VIDEO_ID"
+        
+        # 💡 CAMBIO CLAVE: Usamos PUSHD para entrar al directorio del video.
+        if ! pushd "$VIDEO_ID" > /dev/null; then
+            echo -e "${RED}  ❌ ERROR CRÍTICO: No se pudo entrar al directorio del video $VIDEO_ID. Saltando.${NC}"
+            continue
+        fi
+
+        # --- FASE 1: VERIFICAR Y REPARAR MP4 ---
+        MP4_FILE_NAME=$(find . -maxdepth 1 -name "*.mp4" -print -quit)
+        
+        verificar_integridad_mp4 "$MP4_FILE_NAME"
+        INTEGRITY_CHECK=$?
+        
+        if [ $INTEGRITY_CHECK -ne 0 ]; then
+            echo -e "  ${RED}🚨 REPARACIÓN INICIADA: Intentando descargar/completar el video faltante o corrupto...${NC}"
             
-            # Comando de re-descarga de video
+            VIDEO_OUTPUT_PATTERN="%(id)s.%(ext)s"
+            # Pausa anti error 429
+            #sleep "$(shuf -i 29-109 -n 1).$(shuf -i 1-99 -n1)"
+            cuenta_atras_segura
             yt-dlp \
                 -f "$VIDEO_FORMAT_FILTER" \
                 --recode-video mp4 \
                 --write-thumbnail --convert-thumbnails jpg \
                 --embed-metadata \
                 --cookies-from-browser firefox \
+                --write-info-json \
                 --limit-rate 1M \
                 --extractor-args youtube:player-client=web \
-                -o "$VIDEO_FILENAME_PATTERN" \
+                -o "$VIDEO_OUTPUT_PATTERN" \
+                --force-overwrites \
                 -- "$VIDEO_ID"
                 
             if [ $? -eq 0 ]; then
-                echo -e "  ${GREEN}✔ Video Principal re-descargado con éxito.${NC}"
+                echo -e "  ${GREEN}✔ REPARACIÓN EXITOSA: Video completado/re-descargado.${NC}"
             else
-                echo -e "${RED}  ❌ FALLO DE REPARACIÓN: No se pudo re-descargar el video. Verifique cookies.${NC}"
+                echo -e "  ${RED}❌ REPARACIÓN FALLIDA: No se pudo descargar el video $VIDEO_ID.${NC}"
             fi
-        else
-             echo -e "${RED}  ⚠️ ADVERTENCIA: Video incompleto pero la reparación del video fue saltada (Resolución/xcron no válidos).${NC}"
         fi
-    fi
 
 
-    # ---------------------------------------------------
-    # B2. VERIFICAR THUMBNAIL
-    # ---------------------------------------------------
-    THUMBNAIL_FILE="$VIDEO_ID.$THUMBNAIL_EXTENSION"
-    if [ ! -f "$THUMBNAIL_FILE" ]; then
-        NEEDS_REPAIR=1
-        echo -e "  [FAIL] Thumbnail no encontrado: ${RED}$THUMBNAIL_FILE${NC}"
-        echo -e "  ${CYAN}--- REPARACIÓN: Reintentando descarga del Thumbnail ---${NC}"
+
+        # --- FASE 2: VERIFICAR Y REPARAR METADATOS Y SUBTÍTULOS ---
         
-        # Comando para descargar solo el thumbnail
-        yt-dlp \
-            --write-thumbnail --convert-thumbnails jpg \
-            --skip-download \
-            --cookies-from-browser firefox \
-            -o "$VIDEO_FILENAME_PATTERN" \
-            -- "$VIDEO_ID"
-            
-        if [ $? -eq 0 ] && [ -f "$THUMBNAIL_FILE" ]; then
-            echo -e "  ${GREEN}✔ Thumbnail re-descargado con éxito.${NC}"
-        else
-            echo -e "${RED}  ❌ FALLO DE REPARACIÓN: No se pudo re-descargar el thumbnail.${NC}"
-        fi
-    else
-        echo -e "  [OK] Thumbnail verificado."
-    fi
+        # A. Info JSON
+        if ! find . -maxdepth 1 -name "*.info.json" -print -quit 2>/dev/null; then
+            echo -e "  ${YELLOW}⚠️ Info JSON faltante. Intentando descargar metadatos...${NC}"
 
-    
-    # ---------------------------------------------------
-    # B3. VERIFICAR SUBTÍTULOS
-    # ---------------------------------------------------
-    MISSING_LANGS=""
-    for LANG_CODE in $(echo "$SUBTITLE_LANGUAGES" | tr ',' ' '); do
-        SUB_FILE="$VIDEO_ID.$LANG_CODE.vtt"
-        if [ ! -f "$SUB_FILE" ]; then
-            MISSING_LANGS+="$LANG_CODE,"
-        fi
-    done
-    
-    if [ -n "$MISSING_LANGS" ]; then
-        NEEDS_REPAIR=1
-        MISSING_LANGS=${MISSING_LANGS%,}
-        echo -e "  [FAIL] Faltan subtítulos: ${RED}$MISSING_LANGS${NC}"
-        echo -e "  ${CYAN}--- REPARACIÓN: Reintentando descarga de Subtítulos Faltantes ---${NC}"
-
-        SUBTITLE_ATTEMPTS=0
-        SUBTITLE_SUCCESS=0
-
-        for LANG_CODE_TO_REPAIR in $(echo "$MISSING_LANGS" | tr ',' ' '); do
-            SUBTITLE_ATTEMPTS=$((SUBTITLE_ATTEMPTS + 1))
-            
-            # Comando de descarga de subtítulos para un idioma específico (como en tu script 3)
+            # Pausa anti error 429
+            #sleep "$(shuf -i 29-109 -n 1).$(shuf -i 1-99 -n1)"
+            cuenta_atras_segura
             yt-dlp \
-                --sub-langs "$LANG_CODE_TO_REPAIR" \
-                --write-sub --write-auto-sub \
-                --sub-format vtt \
-                --skip-download \
                 --cookies-from-browser firefox \
-                --quiet \
-                --extractor-args youtube:player-client=web \
-                -o "$VIDEO_FILENAME_PATTERN" \
-                -- "$VIDEO_ID"
-                
+                --write-info-json \
+                --skip-download \
+                -o "%(id)s.%(ext)s" \
+                -- "$VIDEO_ID" 2>/dev/null
+            
             if [ $? -eq 0 ]; then
-                SUBTITLE_SUCCESS=$((SUBTITLE_SUCCESS + 1))
-                echo -e "  ${GREEN}    ✔ Subtítulo $LANG_CODE_TO_REPAIR re-descargado con éxito.${NC}"
+                echo -e "  ${GREEN}✔ Info JSON reparado.${NC}"
             else
-                echo -e "${RED}  ⚠️ ADVERTENCIA: Fallo al re-descargar subtítulo $LANG_CODE_TO_REPAIR.${NC}"
+                echo -e "  ${RED}❌ Fallo al descargar Info JSON.${NC}"
+            fi
+        fi
+
+        # B. Thumbnail (Carátula JPG)
+        if ! find . -maxdepth 1 -name "*.jpg" -print -quit 2>/dev/null; then
+            echo -e "  ${YELLOW}⚠️ Carátula JPG faltante. Intentando descargar thumbnail...${NC}"
+
+            # Pausa anti error 429
+            cuenta_atras_segura  #sleep "$(shuf -i 29-109 -n 1).$(shuf -i 1-99 -n1)"
+
+            yt-dlp \
+                --cookies-from-browser firefox \
+                --write-thumbnail --convert-thumbnails jpg \
+                --skip-download \
+                -o "%(id)s.%(ext)s" \
+                -- "$VIDEO_ID" 2>/dev/null
+            
+            if [ $? -eq 0 ]; then
+                echo -e "  ${GREEN}✔ Carátula JPG reparada.${NC}"
+            else
+                echo -e "  ${RED}❌ Fallo al descargar Carátula JPG.${NC}"
+            fi
+        fi
+        
+# C. Subtítulos VTT (Verifica y repara cada idioma faltante con manejo de errores 429)
+        echo -e "  ${CYAN}--- FASE 2/2: Verificando y Descargando Subtítulos Idioma por Idioma (formato VTT) ---${NC}"
+        
+        LANGUAGES_ARRAY=$(echo "$SUBTITLE_LANGUAGES" | tr ',' ' ')
+        SUBTITLE_SUCCESS=0
+        SUBTITLE_ATTEMPTS=0
+
+        for LANG_CODE in $LANGUAGES_ARRAY; do
+            SUB_FILE_NAME="$VIDEO_ID.$LANG_CODE.vtt"
+            SUBTITLE_ATTEMPTS=$((SUBTITLE_ATTEMPTS + 1))
+
+            # 1. CHECK: Si el archivo del idioma ya existe, saltar
+            if [ -f "$SUB_FILE_NAME" ]; then
+                echo -e "  ${BLUE}✔ Subtítulo '$LANG_CODE' ya existe.${NC}"
+                SUBTITLE_SUCCESS=$((SUBTITLE_SUCCESS + 1)) # Contar como éxito ya que existe
+                continue # Pasar al siguiente idioma
+            fi
+
+            # Si no existe, intentar la descarga con manejo de errores 429
+
+            # 2. Ejecutar yt-dlp y CAPTURAR LA SALIDA DE ERROR (stderr) en YTDLP_ERROR
+            echo -e "  ${YELLOW}⚠️ Subtítulo '$LANG_CODE' faltante. Intentando descargar...${NC}"
+
+            # Pausa anti error 429
+            cuenta_atras_segura    #sleep "$(shuf -i 29-109 -n 1).$(shuf -i 1-99 -n1)"
+
+            # 2>&1 redirige stderr a stdout, y la subshell $(...) captura todo.
+            YTDLP_ERROR=$(yt-dlp \
+            --cookies-from-browser firefox \
+            --write-sub \
+            --write-auto-sub \
+            --sub-format vtt \
+            --sub-lang "$LANG_CODE" \
+            -o "%(id)s.%(ext)s" \
+            --skip-download -- "$VIDEO_ID" 2>&1 >/dev/null) # Redirige salida normal a /dev/null
+        
+            EXIT_CODE_LANG=$? # Capturamos el código de salida
+
+            # 3. COMPROBACIÓN CRÍTICA DEL ERROR 429
+            if echo "$YTDLP_ERROR" | grep -q "429"; then
+                echo -e "${RED}🚨 LÍMITE 429 DETECTADO! Se detiene la descarga de subtítulos para el video actual.${NC}"
+                break # 🛑 ¡SALIR DEL BUCLE DE IDIOMAS!
             fi
             
-            # Pausa aleatoria entre idiomas durante la reparación (14-37s)
-            RANDOM_PAUSE_LANG=$(shuf -i 58-127 -n 1)
-            echo -e "  Esperando ${CYAN}$RANDOM_PAUSE_LANG${NC} segundos antes del siguiente subtítulo de reparación..."
-            sleep "$RANDOM_PAUSE_LANG"
-            
-        done # Fin del ciclo for de subtítulos faltantes
+            # 4. COMPROBACIÓN DE ÉXITO (El archivo debería existir si el código de salida fue 0)
+            if [ $EXIT_CODE_LANG -eq 0 ] && [ -f "$SUB_FILE_NAME" ]; then
+                SUBTITLE_SUCCESS=$((SUBTITLE_SUCCESS + 1))
+                echo -e "  ${GREEN}    ✔ Subtítulo $LANG_CODE descargado con éxito.${NC}"
+            elif [ $EXIT_CODE_LANG -ne 1 ]; then
+                # El código 1 es la salida estándar de "Subtítulo no disponible".
+                # Cualquier otro código de salida (aparte de 0 o 1) es un error real.
+                echo -e "${RED}  ⚠️ ADVERTENCIA: Error al descargar subtítulo $LANG_CODE (Código $EXIT_CODE_LANG).${NC}"
+            fi
+
+            # 5. Pausa aleatoria entre idiomas
+            # Si no se detectó el 429, continuamos con la pausa normal
+            if [ "$LANG_CODE" != "$(echo "$SUBTITLE_LANGUAGES" | rev | cut -d',' -f1 | rev)" ]; then
+                RANDOM_PAUSE_LANG="$(shuf -i 30-109 -n 1).$(shuf -i 1-99 -n1)"
+                echo -e "  Esperando ${CYAN}$RANDOM_PAUSE_LANG${NC} segundos antes del siguiente idioma...${NC}"
+                sleep "$RANDOM_PAUSE_LANG"
+            fi
         
-        echo -e "  ${GREEN}✔ Subtítulos: $SUBTITLE_SUCCESS de $SUBTITLE_ATTEMPTS idiomas faltantes reparados.${NC}"
-    else
-        echo -e "  [OK] Todos los subtítulos requeridos verificados."
-    fi
+        done # Fin del ciclo for de subtítulos
 
-    # ---------------------------------------------------
-    # B4. PAUSA EXTENDIDA DE CORTESÍA SI HUBO REPARACIÓN
-    # ---------------------------------------------------
-    if [ "$NEEDS_REPAIR" -eq 1 ]; then
-        # Pausa de más de 2-3 minutos (180 a 300 segundos)
-        REPAIR_BREAK=$(shuf -i 181-307 -n 1) 
-        echo -e "\n${CYAN}🚨 Hubo reparaciones. Esperando $REPAIR_BREAK segundos antes del siguiente video...${NC}"
-        sleep "$REPAIR_BREAK"
-    fi
+        if [ $SUBTITLE_SUCCESS -gt 0 ]; then
+            echo -e "  ${GREEN}✔ Subtítulos: $SUBTITLE_SUCCESS de $SUBTITLE_ATTEMPTS idiomas intentados se verificaron/descargaron con éxito.${NC}"
+        else
+            echo -e "${RED}  ⚠️ ADVERTENCIA FASE 2: No se pudo verificar/descargar ningún subtítulo para ID $VIDEO_ID.${NC}"
+        fi
 
-    # 5. Volver al directorio principal del canal/lista
-    if ! cd "$CURRENT_WORKING_DIR"; then
-        echo -e "${RED}❌ ERROR FATAL: No se pudo volver al directorio original. Terminando.${NC}"
-        exit 1
-    fi
+
+        # 💡 CAMBIO CLAVE: Usamos POPD para salir del directorio del video.
+        popd > /dev/null
+        echo -e "${GREEN}✔ Saliendo de la carpeta de video. Ubicación actual: $(pwd)${NC}"
+        
+    done < "$ID_LIST_FILE" # Cierre del ciclo WHILE de IDs
+
+    # 💡 CAMBIO CLAVE: Usamos POPD para salir del directorio del canal.
+    popd > /dev/null
     
-done # Fin del ciclo for de videos
+done
 
 # ----------------------------------------------------------------------------------
-# 🔑 PASO C: Finalización
+# 🔑 PASO FINAL: Limpieza y Fin
 # ----------------------------------------------------------------------------------
+
+# 💡 CORRECCIÓN: Volvemos al directorio inicial de la shell principal.
+if [ "$START_DIR" != "$(pwd)" ]; then
+    echo -e "\n${CYAN}Volviendo al directorio inicial: $START_DIR...${NC}"
+    cd "$START_DIR"
+fi
 
 echo -e "\n${GREEN}===================================================================${NC}"
-echo -e "${GREEN} 🎉 Proceso de consolidación de $TOTAL_VIDEOS videos completado. ${NC}"
+echo -e "${GREEN} 🎉 Proceso de Consolidación finalizado. Ubicación final: $(pwd) ${NC}"
 echo -e "${GREEN}===================================================================${NC}"
+

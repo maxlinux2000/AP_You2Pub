@@ -1,0 +1,120 @@
+#!/bin/bash
+
+# --- CONFIGURACIÓN DE PARÁMETROS ---
+URL_EJEMPLO="https://www.youtube.com/@maxlinux2k"
+GEOMETRY="550x300" 
+DOWNLOADER_SCRIPT="./1_downloader.sh"
+CONSOLIDATOR_SCRIPT="./4_consolidator.sh"
+
+
+# ----------------------------------------------------------------------
+## 1️⃣ PRIMERA VENTANA: SELECTOR DE MODO (yad --form con Combo Box)
+# ----------------------------------------------------------------------
+
+EXPLANATORY_TEXT="Selecciona el modo de operación que deseas realizar. 'Descargador' es la opción predeterminada."
+
+MODE_RESULT=$(yad \
+    --title="🚀 You2Pub - Lanzador (Paso 1/2)" \
+    --geometry="$GEOMETRY" \
+    --button="gtk-cancel:1" \
+    --button="gtk-next!Siguiente:0" \
+    --text-align=center \
+    --text="$EXPLANATORY_TEXT" \
+    --form \
+    --field="Modo de Operación:CB" "Descargador!Consolidador" \
+)
+
+# Capturar código de salida para Cancelar
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "Lanzador cancelado por el usuario."
+    exit 1
+fi
+
+# Parsear y limpiar el modo seleccionado (La salida de :CB es simple)
+IFS='|' read -r MODO <<< "$MODE_RESULT"
+MODO=$(echo "$MODO" | xargs)
+
+
+# ----------------------------------------------------------------------
+## 2️⃣ RAMIFICACIÓN DE ACCIÓN
+# ----------------------------------------------------------------------
+
+# --- A) MODO CONSOLIDAR ---
+if [ "$MODO" == "Consolidador" ]; then
+    
+    echo "Modo seleccionado: Consolidador."
+    CONSOLIDA_COMMAND="$CONSOLIDATOR_SCRIPT; echo ' '; echo '--- Consolidación Finalizada ---'; read -p 'Presiona ENTER para cerrar.'"
+
+    # Ejecución del Consolidador con Fallback
+    if command -v gnome-terminal &> /dev/null; then
+        echo "Usando gnome-terminal..."
+        gnome-terminal -- /bin/bash -c "$CONSOLIDA_COMMAND"
+    elif command -v xterm &> /dev/null; then
+        echo "gnome-terminal no encontrado. Usando xterm..."
+        xterm -e /bin/bash -c "$CONSOLIDA_COMMAND"
+    else
+        echo "ERROR: No se encontró un terminal para ejecutar la Consolidación."
+        exit 1
+    fi
+
+    echo "Consolidador lanzado. Lanzador finalizado."
+    exit 0
+fi
+
+
+# ----------------------------------------------------------------------
+## 3️⃣ SEGUNDA VENTANA: DESCARGADOR
+# ----------------------------------------------------------------------
+
+# Si el modo es "Descargador", la primera ventana se cierra y se abre la segunda.
+echo "Modo seleccionado: Descargador. Abriendo segunda ventana..."
+
+DOWNLOAD_RESULT=$(yad \
+    --title="🚀 You2Pub - Lanzador (Paso 2/2)" \
+    --geometry="$GEOMETRY" \
+    --button="gtk-cancel:1" \
+    --button="gtk-next!Siguiente:0" \
+    --text-align=center \
+    --text="**Introduce la URL y selecciona la calidad.**\n\nPulsa Siguiente para iniciar la descarga." \
+    --form \
+    --field="URL del Canal/Playlist:TEXT" "$URL_EJEMPLO" \
+    --field="Calidad de Vídeo:CB" "SD!HD" \
+)
+
+# Capturar código de salida para Cancelar
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "Descarga cancelada por el usuario en el Paso 2."
+    exit 1
+fi
+
+# Parsear los datos de descarga (URL | Calidad)
+IFS='|' read -r URL RESOLUCION <<< "$DOWNLOAD_RESULT"
+URL=$(echo "$URL" | xargs)
+
+# ----------------------------------------------------------------------
+## 4️⃣ EJECUCIÓN DEL DOWNLOADER
+# ----------------------------------------------------------------------
+
+echo "Iniciando descarga de: $URL con resolución $RESOLUCION"
+
+DOWNLOAD_COMMAND="$DOWNLOADER_SCRIPT \"$URL\" \"$RESOLUCION\""
+FINAL_COMMAND="$DOWNLOAD_COMMAND; echo ' '; echo '--- Descarga Finalizada ---'; read -p 'Presiona ENTER para cerrar.'"
+
+# Ejecución del Downloader con Fallback
+if command -v gnome-terminal &> /dev/null; then
+    echo "Usando gnome-terminal..."
+    gnome-terminal -- /bin/bash -c "$FINAL_COMMAND"
+elif command -v xterm &> /dev/null; then
+    echo "gnome-terminal no encontrado. Usando xterm..."
+    xterm -e /bin/bash -c "$FINAL_COMMAND"
+else
+    echo "ERROR: No se encontró un terminal para ejecutar la Descarga."
+    exit 1
+fi
+
+echo "Lanzador finalizado y descarga iniciada."
+

@@ -14,7 +14,6 @@ SUBTITLE_LANGUAGES="es,en,fr,de,pt,it,ru,zh,ja" # Lista de idiomas a descargar
 ID_LIST_FILE="video_ids_for_download.txt" 
 DOWNLOAD_ROOT="Videos" # Carpeta raíz de todas las descargas
 METADATA_TEMP_FILE="metadata_temp.json" # Archivo temporal para el JSON
-DOWNLOAD_ARCHIVE_NAME="downloaded_video_ids.txt" # Nombre del archivo de registro de descargas
 
 # --- Variables de YT-DLP ---
 VIDEO_FORMAT_FILTER=""
@@ -152,8 +151,6 @@ echo "$ID_O_URL,$RESOLUTION_ARGUMENT" > xcron
 echo -e "\n${YELLOW}=== Paso B: Obteniendo la lista de IDs de los videos... ===${NC}"
 echo -e "Lista guardada en: ${CYAN}$ID_LIST_FILE${NC}"
 
-# NOTA: yt-dlp ignorará automáticamente los videos ya presentes en downloaded_video_ids.txt
-# cuando se ejecute el comando principal más abajo.
 mapfile -t VIDEO_IDS < <(yt-dlp \
     --cookies-from-browser firefox \
     --flat-playlist \
@@ -215,7 +212,6 @@ for VIDEO_ID in "${VIDEO_IDS[@]}"; do
         --write-info-json \
         --limit-rate 1M \
         --extractor-args youtube:player-client=web \
-        --download-archive "../$DOWNLOAD_ARCHIVE_NAME" \
         -o "$VIDEO_OUTPUT_PATTERN" \
         -- "$VIDEO_ID"
     
@@ -308,4 +304,3 @@ cd - > /dev/null
 echo -e "\n${GREEN}===================================================================${NC}"
 echo -e "${GREEN} 🎉 Proceso de descarga de $TOTAL_VIDEOS videos del Canal completado. ${NC}"
 echo -e "${GREEN}===================================================================${NC}"
-
