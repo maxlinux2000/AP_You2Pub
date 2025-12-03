@@ -14,3 +14,6 @@ Videos/*
 *.bak
 # ignoramos tambien la carpeta OLD
 OLD
+
+# Ignorar archivos temporales
+*.tmp
