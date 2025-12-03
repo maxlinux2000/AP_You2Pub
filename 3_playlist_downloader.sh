@@ -127,23 +127,67 @@ IconUrl=$(jq -r '.thumbnails[] | select(.id == "0") | .url' channel.info.json) #
 wget "$IconUrl" -O ./img/icon.png 2>/dev/null
 
 
-wget "$IconUrl" -O ./img/icon.png 2>/dev/null
-
 # 6.3. Bajamos el banner del canal
-BANNER_URL=$(jq -r '.thumbnails[] | select(.id == "banner_uncropped").url' channel.info.json) #'
+BANNER_URL=$(jq -r '.thumbnails[] | select(.id == "2").url' channel.info.json) #'
 # Define el nombre de archivo usando el nombre de usuario
-CLEAN_NAME=$(echo "$ID_O_URL" | cut -d '@' -f2)
-OUTPUT_FILENAME="banner_${CLEAN_NAME}.jpg"
-echo "✔ URL del Banner encontrada. Descargando..."
+#CLEAN_NAME=$(echo "$ID_O_URL" | cut -d '@' -f2)
+#OUTPUT_FILENAME="banner_${CLEAN_NAME}.jpg"
+#echo OUTPUT_FILENAME=$OUTPUT_FILENAME
+
+echo "✔ URL del Banner encontrada.BANNER_URL=$BANNER_URL -  Descargando..."
 # 6.3. Descargar la imagen
-wget -O ./img/"$OUTPUT_FILENAME" "$BANNER_URL" 2>/dev/null
+wget -O ./img/banner "$BANNER_URL" 2>/dev/null
+
+FILE_TYPE=$(file --mime-type -b ./img/banner)
+echo "Archivo detectado: $INPUT_FILE"
+echo "Tipo MIME detectado: $FILE_TYPE"
+
+## ⚙️ Paso 2: Convertir o Renombrar
+
+case "$FILE_TYPE" in
+    image/png)
+        echo "Tipo detectado: PNG. Convirtiendo a JPEG..."
+        # Usamos ffmpeg para la conversión. 
+        # La bandera -y sobrescribe el archivo de salida si existe.
+        ffmpeg -i ./img/banner -y ./img/banner.jpg
+        if [ $? -eq 0 ]; then
+            echo "✅ Conversión a ./img/banner.jpg completada."
+            # Opcional: Eliminar el archivo original sin extensión
+            # rm "$INPUT_FILE" 
+        else
+            echo "❌ Error durante la conversión con ffmpeg."
+            exit 2
+        fi
+        ;;
+
+    image/jpeg)
+        echo "Tipo detectado: JPEG/JPG. Renombrando..."
+        mv ./img/banner ./img/banner.jpg
+        if [ $? -eq 0 ]; then
+            echo "✅ Archivo renombrado a  ./img/banner.jpg"
+        else
+            echo "❌ Error al renombrar el archivo."
+            exit 3
+        fi
+        ;;
+
+    *)
+        echo "⚠️ Advertencia: Tipo de archivo no compatible o desconocido: $FILE_TYPE. No se realizaron cambios."
+        echo "Archivos compatibles: image/png, image/jpeg."
+        exit 4
+        ;;
+esac
+
 
 # 6.4 checks
-if [ $? -eq 0 ] && [ -s ./img/"$OUTPUT_FILENAME" ]; then
-    echo "✔ Banner guardado con éxito como: $OUTPUT_FILENAME"
+if [ $? -eq 0 ] && [ -s ./img/banner.jpg ]; then
+    echo "✔ Banner guardado con éxito como: img/banner.jpg."
 else
     echo "❌ ERROR: Fallo al descargar el archivo."
 fi
+
+exit
+
 
 # 6.5. Añadimos un fichero con dentro la url de la playlist y la resolución de descarga original
 echo "$ID_O_URL,$RESOLUTION_ARGUMENT" > xcron

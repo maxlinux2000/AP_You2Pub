@@ -86,6 +86,7 @@ h1, h2, h3, p {
     margin: 20px 0 10px 0;
     border-bottom: 1px solid var(--border-color);
     padding-bottom: 5px;
+    padding-left: 20px;
 }
 
 .main-content-wrapper h3 {
@@ -130,6 +131,7 @@ h1, h2, h3, p {
 .channel-header p {
     font-size: 0.9em; /* Hacemos la metadata muy compacta */
     margin: 2px 0;
+    text-align: left;
 }
 
 
@@ -246,6 +248,30 @@ h1, h2, h3, p {
     margin: 0;
 }
 
+/* ==================================
+ * 4. Layout General (Sidebar y Main Content)
+ * ================================== */
+
+/* ... Código existente ... */
+
+/* Estilos de la lista de canales (Sidebar) */
+#sidebar-content {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+/* 💡 CORRECCIÓN AÑADIDA: Asegurar que el texto dentro del menú escale */
+#sidebar-content a, 
+#sidebar-content .menu-name {
+    /* Usamos una unidad relativa a la variable base, ajustada ligeramente si es necesario */
+    font-size: 0.9em; /* Hereda de body, pero lo hacemos un poco más pequeño para ser compacto */
+    line-height: 1.2; 
+}
+/* Si eso no funciona, forzamos la herencia de la variable base */
+/* #sidebar-content * { font-size: var(--font-scale-base); } */ 
+
+
 .sidebar-item a {
     display: flex;
     align-items: center;
@@ -353,8 +379,8 @@ h1, h2, h3, p {
     padding: 20px 20px 0 20px;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    text-align: center;
+    align-items: normal;
+    text-align: left;
 }
 
 .channel-icon-large {
@@ -364,6 +390,8 @@ h1, h2, h3, p {
     object-fit: cover;
     margin-bottom: 10px;
     border: 3px solid var(--border-color);
+    position: absolute;
+    top: 60px;
 }
 
 .channel-description {

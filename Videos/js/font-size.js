@@ -6,8 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const decreaseButton = document.getElementById('fontDecrease');
     const STORAGE_KEY = 'fontSizeScale';
     
-    const MIN_SIZE = 12;
-    const MAX_SIZE = 24;
+    const MIN_SIZE = 10;
+    const MAX_SIZE = 36;
     const STEP = 2; // Ajustar en pasos de 2px
     
     // Almacenamos el tamaño actual en una variable JS para rastrearlo.
