@@ -22,6 +22,21 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+
+echo -e "${GREEN}1.1. Verificando y actualizando yt-dlp...${NC}"
+
+# Ejecuta el comando de actualización silenciosamente para no interrumpir el flujo
+pip install "yt-dlp[default,curl-cffi]" --upgrade --user --break-system-packages > /dev/null 2>&1
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}    ✔ yt-dlp actualizado a la última versión.${NC}"
+else
+    # Si la actualización falla (a veces pasa por permisos), se emite una advertencia
+    echo -e "${YELLOW}    ⚠️ Advertencia: No se pudo actualizar yt-dlp. Usando la versión existente.${NC}"
+    # No detenemos la ejecución, ya que la versión antigua puede seguir funcionando.
+fi
+
+
 # --- 1. Validación de Argumentos ---
 if [ -z "$ID_O_URL" ] || [ -z "$RESOLUTION_ARGUMENT" ]; then
     echo -e "${RED}❌ ERROR: Faltan argumentos.${NC}"

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=You2Pub
+Comment=Herramienta para descargar contenido de YouTube con yt-dlp y generar un sitio web HTML offline.Utiliza la variable de entorno $HOME para garantizar que la ruta sea correcta para cualquier usuario
+Exec=/bin/bash -c "$HOME/.local/bin/You2Pub"
+Icon=you2pub
+Terminal=true
+Categories=Network;Utility;Video;
+Keywords=YouTube;Descarga;Offline;HTML;
+StartupNotify=true

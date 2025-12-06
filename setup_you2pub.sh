@@ -21,6 +21,11 @@ DENO_OFFLINE_ARCHIVE="deno_offline_installer_linux-x64.tar.gz"
 DENO_CACHE_DIR="$HOME/.cache/deno"
 YOU2PUB_SOURCE_DIR="you2pub_files"
 TEMP_EXTRACT_DIR="/tmp/deno_offline_install_$$"
+# Rutas
+ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps" # Usamos 'scalable' para SVG
+DESKTOP_DIR="$HOME/.local/share/applications"
+
+
 
 echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN} 🚀 Iniciando la instalación COMPLETA de You2Pub ${NC}"
@@ -137,6 +142,8 @@ rm -rf "$TEMP_EXTRACT_DIR"
 
 echo -e "\n${YELLOW}4. Copiando archivos de You2Pub...${NC}"
 
+
+
 # 4a. Copiar los scripts ejecutables a ~/.local/bin/
 echo "  [4a/b] Copiando scripts (.sh, .ts, .js) a '$INSTALL_BIN_DIR'..."
 # La lista de archivos proporcionada:
@@ -146,9 +153,11 @@ echo "  [4a/b] Copiando scripts (.sh, .ts, .js) a '$INSTALL_BIN_DIR'..."
 find "$YOU2PUB_SOURCE_DIR" -maxdepth 1 -type f \
     \( -name "*.sh" -o -name "*.ts" -o -name "*.js" \) \
     -exec cp {} "$INSTALL_BIN_DIR/" \;
+cp $YOU2PUB_SOURCE_DIR/You2Pub "$INSTALL_BIN_DIR/"
 
 # Asegurar permisos de ejecución para scripts .sh
 chmod +x "$INSTALL_BIN_DIR"/*.sh
+chmod +x "$INSTALL_BIN_DIR/You2Pub"
 
 echo -e "    ${GREEN}✔ Scripts de binario copiados y listos.${NC}"
 
@@ -156,6 +165,28 @@ echo -e "    ${GREEN}✔ Scripts de binario copiados y listos.${NC}"
 echo "  [4b/b] Copiando contenido web a '$INSTALL_WEB_DIR'..."
 # Asegurar que el directorio de destino está limpio antes de copiar (opcional, pero seguro)
 rm -rf "$INSTALL_WEB_DIR"/*
+
+# 4c. Copiar Icono SVG (Auto-escalable)
+echo "  [4b/c] Instalando Icono SVG en '$ICON_DIR'..."
+mkdir -p "$ICON_DIR"
+if [ -f "$YOU2PUB_SOURCE_DIR/you2pub.svg" ]; then
+    cp "$YOU2PUB_SOURCE_DIR/you2pub.svg" "$ICON_DIR/you2pub.svg"
+    echo -e "    ${GREEN}✔ Icono SVG (you2pub.svg) instalado.${NC}"
+else
+    echo -e "${RED}❌ ADVERTENCIA: Icono you2pub.svg no encontrado. El lanzador no tendrá imagen.${NC}"
+fi
+
+# 4d. Copiar el Lanzador .desktop
+echo "  [4c/c] Copiando lanzador .desktop a '$DESKTOP_DIR'..."
+mkdir -p "$DESKTOP_DIR"
+if [ -f "$YOU2PUB_SOURCE_DIR/you2pub.desktop" ]; then
+    cp "$YOU2PUB_SOURCE_DIR/you2pub.desktop" "$DESKTOP_DIR/"
+    # Actualizar la base de datos de escritorio para que el sistema lo vea
+    update-desktop-database "$DESKTOP_DIR" 2>/dev/null
+    echo -e "    ${GREEN}✔ Lanzador .desktop instalado y base de datos actualizada.${NC}"
+else
+    echo -e "${RED}❌ ADVERTENCIA: Lanzador you2pub.desktop no encontrado. No se instalará acceso directo.${NC}"
+fi
 
 # Copiar todos los contenidos de la carpeta fuente recursivamente
 cp -R "$YOU2PUB_SOURCE_DIR"/css "$INSTALL_WEB_DIR/"

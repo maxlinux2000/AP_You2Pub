@@ -1,0 +1,12 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="256" height="256" rx="55" fill="#1C3879"/>
+<g id="Folder_And_Arrow">
+<path d="M110 50H206C211.523 50 216 54.4772 216 60V200C216 205.523 211.523 210 206 210H50C44.4772 210 40 205.523 40 200V60C40 54.4772 44.4772 50 50 50H110Z" fill="#F8F8F8" stroke="#FFFFFF" stroke-width="8"/>
+<path d="M50 85H206V60C206 54.4772 201.523 50 196 50H110L90 70H50C44.4772 70 40 74.4772 40 80V85H216V80C216 74.4772 211.523 70 206 70H196L176 50H50Z" fill="#F8F8F8" stroke="#FFFFFF" stroke-width="8"/>
+<rect x="75" y="120" width="70" height="40" rx="5" fill="#FF0000"/>
+<path d="M99 130L125 140L99 150V130Z" fill="white"/>
+<text x="135" y="188" font-family="Arial, sans-serif" font-size="40" font-weight="bold" fill="#1C3879">2Pub</text>
+<path d="M150 140H200" stroke="#1C3879" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M185 130L200 140L185 150" stroke="#1C3879" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</svg>
