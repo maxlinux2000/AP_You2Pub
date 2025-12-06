@@ -15,11 +15,11 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+YOU2PUB_SOURCE_DIR="you2pub_files"
 INSTALL_BIN_DIR="$HOME/.local/bin"
 INSTALL_WEB_DIR="$HOME/public_html/You2Pub"
-DENO_OFFLINE_ARCHIVE="deno_offline_installer_linux-x64.tar.gz"
+DENO_OFFLINE_ARCHIVE="$YOU2PUB_SOURCE_DIR/deno_offline_installer_linux-x64.tar.gz"
 DENO_CACHE_DIR="$HOME/.cache/deno"
-YOU2PUB_SOURCE_DIR="you2pub_files"
 TEMP_EXTRACT_DIR="/tmp/deno_offline_install_$$"
 # Rutas
 ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps" # Usamos 'scalable' para SVG
