@@ -27,11 +27,17 @@ DESKTOP_DIR="$HOME/.local/share/applications"
 
 
 
+
 echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN} 🚀 Iniciando la instalación COMPLETA de You2Pub ${NC}"
 echo -e "${GREEN} Directorio de Binarios: ${INSTALL_BIN_DIR} ${NC}"
 echo -e "${GREEN} Directorio Web: ${INSTALL_WEB_DIR} ${NC}"
 echo -e "${GREEN}============================================${NC}"
+
+# ------------------------------------------------
+# PASO 0: desistalamos y guardamos la version antiguoa de You2Pub
+# ------------------------------------------------
+sudo $YOU2PUB_SOURCE_DIR/uninstall_you2pub_2.6.sh
 
 # ------------------------------------------------
 # PASO 1: Configurar el entorno y verificar requisitos
@@ -163,8 +169,6 @@ echo -e "    ${GREEN}✔ Scripts de binario copiados y listos.${NC}"
 
 # 4b. Copiar los archivos web a $HOME/public_html/You2Pub
 echo "  [4b/b] Copiando contenido web a '$INSTALL_WEB_DIR'..."
-# Asegurar que el directorio de destino está limpio antes de copiar (opcional, pero seguro)
-rm -rf "$INSTALL_WEB_DIR"/*
 
 # 4c. Copiar Icono SVG (Auto-escalable)
 echo "  [4b/c] Instalando Icono SVG en '$ICON_DIR'..."
@@ -195,8 +199,80 @@ cp -R "$YOU2PUB_SOURCE_DIR"/js "$INSTALL_WEB_DIR/"
 echo -e "    ${GREEN}✔ Archivos web copiados con éxito.${NC}"
 
 
+# ===============================================
+# PASO 5
+#
+# PROMPT_MIGRACION_YAD.sh
+# Contiene la función para preguntar al usuario si desea iniciar
+# la migración de canales antiguos usando yad.
+#
+# NOTA: Esto se debe integrar al final del script de SETUP principal.
+# Asegúrate de que 5_legacy_migrator.sh esté en la ruta correcta.
+# ===============================================
+
+# Obtener la ruta del script para asegurar la ejecución correcta
+#SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )" #"
+#MIGRATOR_SCRIPT="$SCRIPT_DIR/5_legacy_migrator.sh"
+
+MIGRATOR_SCRIPT="$HOME/.local/bin/5_legacy_migrator.sh"
+
+# Colores (Asumiendo que están definidos en el script principal)
+# YELLOW='\033[1;33m'; CYAN='\033[0;36m'; RED='\033[0;31m'; GREEN='\033[0;32m'; NC='\033[0m'
+
+# --- Función Principal del Prompt ---
+migracion_legacy_prompt() {
+    echo -e "\n--- Comprobando la necesidad de migración de canales legacy... ---"
+
+    # Determinar si existe al menos una carpeta con un archivo de lista antiguo ("*-yt-list").
+    # La presencia de este archivo indica el formato antiguo.
+    # La variable DOWNLOAD_ROOT debe estar disponible en el entorno de ejecución
+    # Usamos find -maxdepth 2 -type f para limitar la búsqueda solo a directorios de canales
+    cd $INSTALL_WEB_DIR
+    if find .  -maxdepth 1 -type f -name "*-yt-list" -print -quit 2>/dev/null | grep -q .; then
+
+        echo -e "--- ${YELLOW}Canales legacy detectados (fichero *-yt-list). Abriendo prompt YAD.${NC} ---"
+
+        # Comando YAD para el diálogo de confirmación
+        # Se usa un ancho y alto fijos para asegurar la legibilidad del texto.
+        yad --center \
+            --title="Migración de Canales You2Pub" \
+            --text="¡Atención! Se han detectado carpetas de canales de versiones anteriores de You2Pub.\n\nPara garantizar la estabilidad y evitar duplicados (debido a canales renombrados), es necesario CONSOLIDAR Y CONVERTIR estos directorios al nuevo formato canónico.\n\nEsta operación puede tardar bastante (dependiendo de la cantidad de canales) ya que implica consultar metadatos a YouTube.\n\n¿Desea iniciar la migración ahora?\n\n(También puede lanzarla manualmente después ejecutando '$MIGRATOR_SCRIPT')" \
+            --button="Cancelar!:1" \
+            --button="OK:0" \
+            --width=600 \
+            --height=280
+
+        # Capturar el código de salida de YAD
+        YAD_EXIT_CODE=$?
+
+        if [ $YAD_EXIT_CODE -eq 0 ]; then
+            echo -e "\n${GREEN}--- Opción OK seleccionada. Iniciando migración... ---${NC}"
+            
+            # Ejecutar el script de migración
+            if [ -f "$MIGRATOR_SCRIPT" ]; then
+                "$MIGRATOR_SCRIPT"
+            else
+                echo -e "\n${RED}ERROR: No se encontró el script de migración en '$MIGRATOR_SCRIPT'. Debe ejecutarlo manualmente.${NC}"
+            fi
+
+        elif [ $YAD_EXIT_CODE -eq 1 ]; then
+            echo -e "\n${YELLOW}--- Migración de canales legacy CANCELADA. ---${NC}"
+            echo "Recuerde ejecutar $MIGRATOR_SCRIPT más tarde."
+        else
+            # 252 o cualquier otro código de error (ej. cerrar la ventana)
+            echo -e "\n${YELLOW}--- Prompt de migración cerrado o error. Cancelando migración. ---${NC}"
+            echo "Recuerde ejecutar $MIGRATOR_SCRIPT más tarde."
+        fi
+    else
+        echo -e "--- ${BLUE}No se detectaron canales legacy (fichero *-yt-list). Saltando migración.${NC} ---"
+    fi
+}
+
+migracion_legacy_prompt
+
+
 # ------------------------------------------------
-# PASO 5: Mensaje Final de Configuración
+# PASO 6: Mensaje Final de Configuración
 # ------------------------------------------------
 
 echo -e "\n${GREEN}============================================${NC}"

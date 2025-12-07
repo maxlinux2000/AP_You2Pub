@@ -3,11 +3,13 @@
 # CONSOLIDADOR.sh
 # Verifica la integridad de los videos y la presencia de metadatos (JSON, Thumbnail, VTT).
 # Intenta reparar o descargar archivos faltantes o corruptos.
+# Incluye función de Reparación Legacy para canales antiguos.
 # ===============================================
 
 # --- Constantes de Directorio y Archivos ---
 DOWNLOAD_ROOT="$HOME/public_html/You2Pub"
 ID_LIST_FILENAME="video_ids_for_download.txt"
+DOWNLOADED_LIST_FILENAME="downloaded_video_ids.txt" # Nuevo
 XCRON_FILENAME="xcron"
 SUBTITLE_LANGUAGES="es,en,fr,de,pt,it,ru,zh,ja"
 VIDEO_FILENAME_PATTERN="%(id)s.%(ext)s" # El patrón usado en los scripts de descarga
@@ -64,6 +66,90 @@ configurar_filtro_formato() {
     esac
 }
 
+# Función para reparar metadatos esenciales faltantes en canales antiguos (legacy)
+reparar_metadatos_canal_legacy() {
+    local id_url="$1"
+    CHANNEL_DIR="$2"
+    echo -e "  ${YELLOW}🚨 REPARACIÓN LEGACY INICIADA: Verificando y descargando archivos esenciales...${NC}"
+
+    # 1. Descargar la lista de IDs (video_ids_for_download.txt) si falta.
+    if [ ! -f "$ID_LIST_FILENAME" ]; then
+        echo -e "    ${YELLOW}→ $ID_LIST_FILENAME faltante. Descargando lista de IDs...${NC}"
+        #cuenta_atras_segura # Pausa antes de la descarga
+        # Descarga todos los IDs de la playlist/canal
+        yt-dlp \
+            --cookies-from-browser firefox \
+            --flat-playlist \
+            --no-warnings \
+            --print id \
+            -- "$id_url" > "$ID_LIST_FILENAME"
+            
+        if [ $? -eq 0 ] && [ -s "$ID_LIST_FILENAME" ]; then
+            echo -e "    ${GREEN}✔ Lista de IDs descargada y guardada.${NC}"
+        else
+            echo -e "    ${RED}❌ Fallo al descargar la lista de IDs. Verifique la URL en xcron.${NC}"
+            return 1
+        fi
+    fi
+    
+    # 2. Inicializar downloaded_video_ids.txt si falta
+    if [ ! -f "$DOWNLOADED_LIST_FILENAME" ]; then
+        # Para canales legacy, copiamos la lista completa para forzar la verificación en la fase 1.
+        cp "$ID_LIST_FILENAME" "$DOWNLOADED_LIST_FILENAME"
+        echo -e "    ${GREEN}✔ Creado $DOWNLOADED_LIST_FILENAME para compatibilidad.${NC}"
+    fi
+
+    # 3. Descargar metadatos del canal/playlist (channel.json) si falta.
+    if [ ! -f channel.json ]; then
+        echo -e "    ${YELLOW}→ channel.json faltante. Descargando metadatos del canal...${NC}"
+        # cuenta_atras_segura # Pausa antes de la descarga
+        sleep $(shuf -i 11-37 -n 1)
+        # Descarga la info JSON de la playlist/canal (playlist-items 0)
+        yt-dlp \
+            --cookies-from-browser firefox \
+            --skip-download \
+            --write-info-json \
+            --playlist-items 0 \
+            --output "channel_temp.%(ext)s" \
+            -- "$id_url" 2>/dev/null
+
+        # Buscamos el archivo generado (ej. channel_temp.info.json) y lo renombramos a channel.json
+        if [ -f channel_temp.info.json ]; then
+            mv channel_temp.info.json channel.json
+            echo -e "    ${GREEN}✔ Metadatos de canal (channel.json) descargados.${NC}"
+        else
+            echo -e "    ${RED}❌ Fallo al descargar metadatos del canal.${NC}"
+        fi
+    fi
+    
+    # 4. Descargar metadatos_base.json (lista plana de metadatos de todos los videos) si falta.
+    METADATOS_BASE_FILENAME="metadatos_base.json"
+    if [ ! -f "$METADATOS_BASE_FILENAME" ]; then
+        echo -e "    ${YELLOW}→ $METADATOS_BASE_FILENAME faltante. Descargando metadatos base (JSON de múltiples líneas)...${NC}"
+        #cuenta_atras_segura
+        sleep $(shuf -i 11-37 -n 1)
+        # Usa la sintaxis que habías propuesto, que genera un JSON por línea.
+        yt-dlp \
+            --cookies-from-browser firefox \
+            --dump-json \
+            --flat-playlist \
+            --no-warnings \
+            -- "$id_url" > "$METADATOS_BASE_FILENAME" 2>/dev/null
+
+        if [ $? -eq 0 ] && [ -s "$METADATOS_BASE_FILENAME" ]; then
+             echo -e "    ${GREEN}✔ Metadatos base descargados y guardados.${NC}"
+        else
+             echo -e "    ${RED}❌ Fallo al descargar metadatos base. (No crítico para la fase de consolidación).${NC}"
+        fi
+    fi
+    # 5 limpiar ficheros antiguos
+    rm $CHANNEL_DIR/*.webm $CHANNEL_DIR/Snipp*.list $CHANNEL_DIR/videocount $CHANNEL_DIR/missing $CHANNEL_DIR/deteted $CHANNEL_DIR/*.list $CHANNEL_DIR/SnipSM.txt
+    rm $CHANNEL_DIR/index-older.html $CHANNEL_DIR/style.css $CHANNEL_DIR/index.html
+    rm -rf $CHANNEL_DIR/js
+
+    echo -e "  ${GREEN}✔ REPARACIÓN LEGACY FINALIZADA.${NC}"
+    return 0
+}
 
 # Función para verificar la integridad del archivo MP4 usando ffprobe.
 # Retorna 0 si es íntegro, 1 si está incompleto o corrupto.
@@ -96,7 +182,6 @@ verificar_integridad_mp4() {
 # 🔑 FASE PRINCIPAL: Recorrer Canales y Videos
 # ----------------------------------------------------------------------------------
 
-# 💡 CORRECCIÓN: Guardamos el directorio de inicio de la shell principal.
 START_DIR=$(pwd)
 
 echo -e "\n${YELLOW}===================================================================${NC}"
@@ -106,39 +191,54 @@ echo -e "${YELLOW}==============================================================
 # Recorrer todos los directorios de canales en la carpeta raíz
 find "$DOWNLOAD_ROOT" -mindepth 1 -maxdepth 1 -type d | while read -r CHANNEL_DIR; do
     CHANNEL_NAME=$(basename "$CHANNEL_DIR")
+
+    # --- FILTRO NUEVO: Saltar carpetas de assets web ---
+    if [ "$CHANNEL_NAME" == "css" ] || [ "$CHANNEL_NAME" == "js" ]; then
+        continue
+    fi
+    
     echo -e "\n${CYAN}>>> CANAL: $CHANNEL_NAME ${NC}"
     
-    # 💡 CAMBIO CLAVE: Usamos PUSHD para entrar al directorio del canal.
-    # > /dev/null es para suprimir el output por defecto de pushd
     if ! pushd "$CHANNEL_DIR" > /dev/null; then
         echo -e "${RED}❌ ERROR: No se pudo entrar a $CHANNEL_DIR. Saltando.${NC}"
         continue
     fi
     
     # Leer la URL del canal y la resolución original (si existe)
+    CHANNEL_URL=""
     if [ -f xcron ]; then
         read -r CHANNEL_URL RESOLUTION_ARGUMENT <<< "$(cat xcron | tr ',' ' ')"
         echo -e "  ${BLUE}Info: URL de origen: $CHANNEL_URL | Res. Original: $RESOLUTION_ARGUMENT${NC}"
-        
-        # 💡 CAMBIO: Configurar el filtro de formato basado en xcron
+
         configurar_filtro_formato "$RESOLUTION_ARGUMENT"
         echo -e "  ${BLUE}Filtro de formato YT-DLP establecido según la resolución: $RESOLUTION_ARGUMENT${NC}"
     else
         echo -e "  ${RED}❌ ADVERTENCIA: No se encontró el archivo xcron. Usando filtro HD por defecto.${NC}"
-        CHANNEL_URL=""
         configurar_filtro_formato "HD"
     fi
 
     # -------------------------------------------------------------
-    # --- 1. Iterar sobre los IDs de VIDEO usando el archivo de lista ---
+    # --- 1. Verificar y Reparar Archivos Esenciales del Canal ---
     # -------------------------------------------------------------
     ID_LIST_FILE="video_ids_for_download.txt"
 
     if [ ! -f "$ID_LIST_FILE" ]; then
-        echo -e "  ${RED}❌ ERROR: Archivo de lista '$ID_LIST_FILE' no encontrado en el canal. Saltando videos.${NC}"
-        # 💡 CORRECCIÓN: Si falla aquí, salimos del PUSHD del canal
-        popd > /dev/null 
-        continue
+        echo -e "  ${RED}❌ ERROR: Archivo de lista '$ID_LIST_FILE' no encontrado en el canal.${NC}"
+
+        # --- NUEVO: Intentar reparación si tenemos la URL de xcron ---
+        if [ -f xcron ] && [ -n "$CHANNEL_URL" ]; then
+            reparar_metadatos_canal_legacy "$CHANNEL_URL" "$CHANNEL_DIR"
+            # Volver a verificar el archivo después del intento de reparación
+            if [ ! -f "$ID_LIST_FILE" ]; then
+                echo -e "  ${RED}❌ ERROR: La reparación legacy falló. Saltando videos.${NC}"
+                popd > /dev/null  
+                continue
+            fi
+        else
+            echo -e "  ${RED}❌ ERROR: No se puede reparar (xcron faltante o URL vacía). Saltando videos.${NC}"
+            popd > /dev/null  
+            continue
+        fi
     fi
 
     echo -e "  ${GREEN}✔ Lista de IDs encontrada. Procesando videos...${NC}"
@@ -159,7 +259,6 @@ find "$DOWNLOAD_ROOT" -mindepth 1 -maxdepth 1 -type d | while read -r CHANNEL_DI
         # 1. Crear la carpeta si no existe y entrar
         mkdir -p "$VIDEO_ID"
         
-        # 💡 CAMBIO CLAVE: Usamos PUSHD para entrar al directorio del video.
         if ! pushd "$VIDEO_ID" > /dev/null; then
             echo -e "${RED}  ❌ ERROR CRÍTICO: No se pudo entrar al directorio del video $VIDEO_ID. Saltando.${NC}"
             continue
@@ -176,7 +275,6 @@ find "$DOWNLOAD_ROOT" -mindepth 1 -maxdepth 1 -type d | while read -r CHANNEL_DI
             
             VIDEO_OUTPUT_PATTERN="%(id)s.%(ext)s"
             # Pausa anti error 429
-            #sleep "$(shuf -i 29-109 -n 1).$(shuf -i 1-99 -n1)"
             cuenta_atras_segura
             yt-dlp \
                 -f "$VIDEO_FORMAT_FILTER" \
@@ -199,7 +297,6 @@ find "$DOWNLOAD_ROOT" -mindepth 1 -maxdepth 1 -type d | while read -r CHANNEL_DI
         fi
 
 
-
         # --- FASE 2: VERIFICAR Y REPARAR METADATOS Y SUBTÍTULOS ---
         
         # A. Info JSON
@@ -207,7 +304,6 @@ find "$DOWNLOAD_ROOT" -mindepth 1 -maxdepth 1 -type d | while read -r CHANNEL_DI
             echo -e "  ${YELLOW}⚠️ Info JSON faltante. Intentando descargar metadatos...${NC}"
 
             # Pausa anti error 429
-            #sleep "$(shuf -i 29-109 -n 1).$(shuf -i 1-99 -n1)"
             cuenta_atras_segura
             yt-dlp \
                 --cookies-from-browser firefox \
@@ -228,7 +324,7 @@ find "$DOWNLOAD_ROOT" -mindepth 1 -maxdepth 1 -type d | while read -r CHANNEL_DI
             echo -e "  ${YELLOW}⚠️ Carátula JPG faltante. Intentando descargar thumbnail...${NC}"
 
             # Pausa anti error 429
-            cuenta_atras_segura  #sleep "$(shuf -i 29-109 -n 1).$(shuf -i 1-99 -n1)"
+            cuenta_atras_segura
 
             yt-dlp \
                 --cookies-from-browser firefox \
@@ -244,7 +340,7 @@ find "$DOWNLOAD_ROOT" -mindepth 1 -maxdepth 1 -type d | while read -r CHANNEL_DI
             fi
         fi
         
-# C. Subtítulos VTT (Verifica y repara cada idioma faltante con manejo de errores 429)
+        # C. Subtítulos VTT (Verifica y repara cada idioma faltante con manejo de errores 429)
         echo -e "  ${CYAN}--- FASE 2/2: Verificando y Descargando Subtítulos Idioma por Idioma (formato VTT) ---${NC}"
         
         LANGUAGES_ARRAY=$(echo "$SUBTITLE_LANGUAGES" | tr ',' ' ')
@@ -263,12 +359,10 @@ find "$DOWNLOAD_ROOT" -mindepth 1 -maxdepth 1 -type d | while read -r CHANNEL_DI
             fi
 
             # Si no existe, intentar la descarga con manejo de errores 429
-
-            # 2. Ejecutar yt-dlp y CAPTURAR LA SALIDA DE ERROR (stderr) en YTDLP_ERROR
             echo -e "  ${YELLOW}⚠️ Subtítulo '$LANG_CODE' faltante. Intentando descargar...${NC}"
 
             # Pausa anti error 429
-            cuenta_atras_segura    #sleep "$(shuf -i 29-109 -n 1).$(shuf -i 1-99 -n1)"
+            cuenta_atras_segura
 
             # 2>&1 redirige stderr a stdout, y la subshell $(...) captura todo.
             YTDLP_ERROR=$(yt-dlp \
@@ -279,7 +373,7 @@ find "$DOWNLOAD_ROOT" -mindepth 1 -maxdepth 1 -type d | while read -r CHANNEL_DI
             --sub-lang "$LANG_CODE" \
             -o "%(id)s.%(ext)s" \
             --skip-download -- "$VIDEO_ID" 2>&1 >/dev/null) # Redirige salida normal a /dev/null
-        
+            
             EXIT_CODE_LANG=$? # Capturamos el código de salida
 
             # 3. COMPROBACIÓN CRÍTICA DEL ERROR 429
@@ -300,6 +394,7 @@ find "$DOWNLOAD_ROOT" -mindepth 1 -maxdepth 1 -type d | while read -r CHANNEL_DI
 
             # 5. Pausa aleatoria entre idiomas
             # Si no se detectó el 429, continuamos con la pausa normal
+            # Solo pausar si NO es el último elemento de la lista
             if [ "$LANG_CODE" != "$(echo "$SUBTITLE_LANGUAGES" | rev | cut -d',' -f1 | rev)" ]; then
                 RANDOM_PAUSE_LANG="$(shuf -i 30-109 -n 1).$(shuf -i 1-99 -n1)"
                 echo -e "  Esperando ${CYAN}$RANDOM_PAUSE_LANG${NC} segundos antes del siguiente idioma...${NC}"
@@ -315,13 +410,11 @@ find "$DOWNLOAD_ROOT" -mindepth 1 -maxdepth 1 -type d | while read -r CHANNEL_DI
         fi
 
 
-        # 💡 CAMBIO CLAVE: Usamos POPD para salir del directorio del video.
         popd > /dev/null
         echo -e "${GREEN}✔ Saliendo de la carpeta de video. Ubicación actual: $(pwd)${NC}"
         
     done < "$ID_LIST_FILE" # Cierre del ciclo WHILE de IDs
 
-    # 💡 CAMBIO CLAVE: Usamos POPD para salir del directorio del canal.
     popd > /dev/null
     
 done
@@ -330,7 +423,6 @@ done
 # 🔑 PASO FINAL: Limpieza y Fin
 # ----------------------------------------------------------------------------------
 
-# 💡 CORRECCIÓN: Volvemos al directorio inicial de la shell principal.
 if [ "$START_DIR" != "$(pwd)" ]; then
     echo -e "\n${CYAN}Volviendo al directorio inicial: $START_DIR...${NC}"
     cd "$START_DIR"
