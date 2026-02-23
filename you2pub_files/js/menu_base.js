@@ -1,88 +1,74 @@
-// menu_base.js (Lógica central compartida y manejo de interacción, con logs)
+/**
+ * menu_base.js
+ * Lógica central para cargar y renderizar el menú lateral.
+ */
 
-// 🚨 LOG 1: Comprobamos si el script base se está ejecutando.
-//console.log("--- DEBUG: Ejecutando menu_base.js ---");
-
-// Importa los datos del menú. Si esto falla, el código de renderizado no se ejecutará.
-import { menuData } from './menu_data.js';
-
-// 🚨 LOG 2: Comprobamos si los datos del menú se han cargado.
-//if (menuData && menuData.length > 0) {
-//    console.log(`DEBUG: ✅ Datos de menú cargados correctamente. ${menuData.length} canales encontrados.`);
-//    console.log("DEBUG: Primer canal:", menuData[0].name);
-//} else {
-//    console.error("DEBUG: ❌ ERROR: menuData está vacío o no se pudo cargar.");
-//}
-
-
-// menu_base.js (Lógica central compartida y manejo de interacción, USANDO sidebar-content)
-
+console.log("--- DEBUG: Cargando menu_base.js ---");
 
 /**
- * Genera el HTML del menú y lo inserta en el contenedor dado.
- * El valor por defecto se cambia a 'sidebar-content'
- * @param {string} prefix - El prefijo de ruta necesario (ej: "", "../", "../../").
- * @param {string} containerId - El ID del elemento donde se insertará la lista de canales.
+ * Renderiza el menú lateral cargando los datos desde menu_data.json
+ * @param {string} prefix - Prefijo de ruta (ej: './' o '../')
+ * @param {string} containerId - ID del contenedor <ul>
  */
-export function renderMenu(prefix, containerId = 'sidebar-content') { // 👈 CAMBIO AQUÍ
-    // 🚨 LOG 3: Comprobamos el prefijo recibido.
-    console.log(`DEBUG: Invocando renderMenu() con prefijo: '${prefix}' en ID: ${containerId}`);
-    
+export async function renderMenu(prefix = './', containerId = 'sidebar-content') {
     const container = document.getElementById(containerId);
+    
     if (!container) {
-        console.error(`DEBUG: ❌ Contenedor '${containerId}' no encontrado. Asegúrate de que existe en el HTML.`);
+        console.error(`DEBUG: ❌ No se encontró el contenedor #${containerId}`);
         return;
     }
-    console.log(`DEBUG: ✅ Contenedor '${containerId}' encontrado.`);
 
-    // --- 1. Generación del HTML de la lista de canales (NO del botón hamburguesa) ---
-    
-    let menuHtml = '';
+    try {
+        // Construimos la ruta al JSON de forma relativa para evitar errores de dominio
+        const jsonUrl = `${prefix}js/menu_data.json`;
+        console.log(`DEBUG: Intentando cargar menú desde: ${jsonUrl}`);
 
-    // El botón de hamburguesa ya existe en el HTML como #toggleSidebar. 
-    // Solo inyectamos la lista de enlaces en #sidebar-content.
-    
-    menuData.forEach(item => {
-        const finalUrl = prefix + item.url.substring(2);
-        const finalIcon = prefix + item.icon.substring(2);
+        const response = await fetch(jsonUrl);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-        // ... (Log de ejemplo) ...
+        const channels = await response.json();
+        console.log(`DEBUG: ✅ ${channels.length} canales cargados.`);
 
-        // Usamos <li> o <a> directamente dependiendo de la estructura de #sidebar-content
-        // Como #sidebar-content es un <ul>, inyectamos <li>:
-        menuHtml += `
-            <li><a href="${finalUrl}" class="menu-item">
-                <img src="${finalIcon}" alt="Icono de ${item.name}" class="menu-icon">
-                <span class="menu-name">${item.name}</span>
-            </a></li>
-        `;
-    });
+        let menuHtml = '';
 
-    // Reemplazamos el contenido de "Cargando canales..."
-    container.innerHTML = menuHtml;
+        channels.forEach(item => {
+            // El JSON contiene el nombre de la carpeta en 'folder'
+            const folder = item.folder;
+            
+            // Construimos rutas relativas basadas en el prefijo
+            const finalUrl = `${prefix}${folder}/index.html`;
+            const finalIcon = `${prefix}${folder}/img/icon.png`;
 
-    console.log("DEBUG: ✅ Lista de canales inyectada en el contenedor.");
+            menuHtml += `
+                <li>
+                    <a href="${finalUrl}" class="menu-item">
+                        <img src="${finalIcon}" alt="${folder}" class="menu-icon" 
+                             onerror="this.src='${prefix}js/default-icon.png';">
+                        <span class="menu-name">${folder}</span>
+                    </a>
+                </li>
+            `;
+        });
 
+        container.innerHTML = menuHtml;
 
-    // --- 2. Lógica de Interacción (Toggle del Menú Lateral) ---
+    } catch (error) {
+        console.error("DEBUG: ❌ Error cargando el menú:", error);
+        container.innerHTML = `<li style="padding:10px; color:red;">Error cargando menú</li>`;
+    }
 
-    // El botón de toggle ya es #toggleSidebar en tu HTML.
-    // El elemento a colapsar es la misma #sidebar.
+    // --- Lógica del botón Toggle ---
     const sidebar = document.getElementById('sidebar');
     const menuToggle = document.getElementById('toggleSidebar');
 
     if (menuToggle && sidebar) {
-        menuToggle.addEventListener('click', () => {
-            const isExpanded = sidebar.classList.contains('collapsed');
-            
-            // Alterna el estado visual
+        // Eliminamos listeners previos para evitar duplicados
+        menuToggle.onclick = () => {
             sidebar.classList.toggle('collapsed');
-
-            console.log(`DEBUG: Sidebar clickeada. Estado: ${isExpanded ? 'ABIERTO' : 'CERRADO'}`);
-        });
-        console.log("DEBUG: ✅ Listener de click añadido a #toggleSidebar.");
-    } else {
-        console.error("DEBUG: ❌ No se pudo encontrar #toggleSidebar o #sidebar.");
+            console.log("DEBUG: Sidebar toggle clickeado");
+        };
     }
 }
-// El resto del código de menu_base.js se mantiene igual.
